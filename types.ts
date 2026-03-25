@@ -102,6 +102,16 @@ export interface SystemSettings {
   };
   chipin: {
     enabled: boolean;
+    appUrl: string; // e.g. https://vms.gptt.my — used for voucher links, QR codes, success_callback
+  };
+  voucherPage: {
+    logoUrl: string;       // image shown top-left
+    backgroundImage: string; // left panel bg image URL
+    primaryColor: string;  // hex, default #0d9488
+    website: string;       // shown on voucher footer
+    footerText: string;    // T&C / fine print
+    contactEmail: string;
+    contactPhone: string;
   };
 }
 

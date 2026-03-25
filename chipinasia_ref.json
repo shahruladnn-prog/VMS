@@ -1,0 +1,884 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "CHIP Collect API",
+        "description": "Complete API documentation for CHIP-IN Asia payment gateway. CHIP Collect allows merchants to accept online payments via multiple payment methods including FPX, credit/debit cards, e-wallets, and more.",
+        "version": "1.0.0",
+        "contact": {
+            "name": "CHIP Support",
+            "url": "https://support.chip-in.asia/"
+        }
+    },
+    "servers": [
+        {
+            "url": "https://gate.chip-in.asia/api/v1",
+            "description": "Production Server"
+        }
+    ],
+    "components": {
+        "securitySchemes": {
+            "bearerAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "description": "Bearer authentication using your secret API key. Obtain from: https://portal.chip-in.asia/collect/developers/api-keys"
+            }
+        },
+        "schemas": {
+            "Purchase": {
+                "type": "object",
+                "required": [
+                    "client",
+                    "purchase",
+                    "brand_id"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Unique purchase ID (auto-generated)"
+                    },
+                    "client": {
+                        "$ref": "#/components/schemas/ClientDetails"
+                    },
+                    "purchase": {
+                        "$ref": "#/components/schemas/PurchaseDetails"
+                    },
+                    "brand_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "ID of the brand to create this Purchase for. Obtain from: https://portal.chip-in.asia/collect/developers/brands"
+                    },
+                    "client_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "ID of existing Client object (alternative to providing client object)"
+                    },
+                    "send_receipt": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Whether to send receipt email when purchase is paid"
+                    },
+                    "skip_capture": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Card payment-specific: if true, only authorize payment (place funds on hold). Requires POST /capture/ or POST /release/ later"
+                    },
+                    "force_recurring": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Force saving card for recurring payments"
+                    },
+                    "reference": {
+                        "type": "string",
+                        "description": "Your custom reference/order ID"
+                    },
+                    "order_id": {
+                        "type": "string",
+                        "description": "Your order ID for tracking"
+                    },
+                    "success_redirect": {
+                        "type": "string",
+                        "format": "uri",
+                        "description": "URL to redirect customer after successful payment"
+                    },
+                    "failure_redirect": {
+                        "type": "string",
+                        "format": "uri",
+                        "description": "URL to redirect customer after failed payment"
+                    },
+                    "cancel_redirect": {
+                        "type": "string",
+                        "format": "uri",
+                        "description": "URL to redirect customer if payment is cancelled"
+                    },
+                    "success_callback": {
+                        "type": "string",
+                        "format": "uri",
+                        "description": "Webhook URL to call on successful payment (alternative to webhook setup)"
+                    },
+                    "payment_method_whitelist": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "List of allowed payment methods (e.g., ['fpx', 'visa', 'mastercard'])"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "created",
+                            "paid",
+                            "cancelled",
+                            "refunded",
+                            "preauthorized"
+                        ],
+                        "description": "Current purchase status"
+                    },
+                    "checkout_url": {
+                        "type": "string",
+                        "format": "uri",
+                        "description": "URL to redirect customer for payment (returned after creation)"
+                    },
+                    "direct_post_url": {
+                        "type": "string",
+                        "format": "uri",
+                        "description": "URL for direct card posting (skip payment page)"
+                    },
+                    "invoice_url": {
+                        "type": "string",
+                        "format": "uri",
+                        "description": "URL to view invoice"
+                    },
+                    "payment": {
+                        "$ref": "#/components/schemas/PaymentInfo"
+                    },
+                    "transaction_data": {
+                        "$ref": "#/components/schemas/TransactionData"
+                    },
+                    "created_on": {
+                        "type": "integer",
+                        "description": "Unix timestamp of creation"
+                    },
+                    "updated_on": {
+                        "type": "integer",
+                        "description": "Unix timestamp of last update"
+                    },
+                    "is_test": {
+                        "type": "boolean",
+                        "description": "Whether this is a test transaction"
+                    }
+                }
+            },
+            "ClientDetails": {
+                "type": "object",
+                "required": [
+                    "email"
+                ],
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "description": "Customer email (required)"
+                    },
+                    "phone": {
+                        "type": "string",
+                        "description": "Customer phone number (e.g., +60123456789)"
+                    },
+                    "full_name": {
+                        "type": "string",
+                        "description": "Customer full name"
+                    },
+                    "personal_code": {
+                        "type": "string",
+                        "description": "Personal identification code"
+                    },
+                    "street_address": {
+                        "type": "string",
+                        "description": "Billing street address"
+                    },
+                    "country": {
+                        "type": "string",
+                        "description": "Billing country code (ISO 3166-1 alpha-2)"
+                    },
+                    "city": {
+                        "type": "string",
+                        "description": "Billing city"
+                    },
+                    "zip_code": {
+                        "type": "string",
+                        "description": "Billing postal/zip code"
+                    },
+                    "state": {
+                        "type": "string",
+                        "description": "Billing state/province"
+                    },
+                    "shipping_street_address": {
+                        "type": "string",
+                        "description": "Shipping street address"
+                    },
+                    "shipping_country": {
+                        "type": "string",
+                        "description": "Shipping country code"
+                    },
+                    "shipping_city": {
+                        "type": "string",
+                        "description": "Shipping city"
+                    },
+                    "shipping_zip_code": {
+                        "type": "string",
+                        "description": "Shipping postal/zip code"
+                    },
+                    "shipping_state": {
+                        "type": "string",
+                        "description": "Shipping state/province"
+                    },
+                    "legal_name": {
+                        "type": "string",
+                        "description": "Company legal name (for business customers)"
+                    },
+                    "brand_name": {
+                        "type": "string",
+                        "description": "Company brand name"
+                    },
+                    "registration_number": {
+                        "type": "string",
+                        "description": "Company registration number"
+                    },
+                    "tax_number": {
+                        "type": "string",
+                        "description": "Tax identification number"
+                    }
+                }
+            },
+            "PurchaseDetails": {
+                "type": "object",
+                "required": [
+                    "products"
+                ],
+                "properties": {
+                    "products": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Product"
+                        },
+                        "description": "List of products in this purchase"
+                    },
+                    "currency": {
+                        "type": "string",
+                        "default": "MYR",
+                        "description": "Currency code (ISO 4217). Default: MYR"
+                    },
+                    "total": {
+                        "type": "integer",
+                        "description": "Total amount in cents (auto-calculated from products if not provided)"
+                    },
+                    "language": {
+                        "type": "string",
+                        "default": "en",
+                        "description": "Language code for payment page (en, ms, zh, etc.)"
+                    },
+                    "notes": {
+                        "type": "string",
+                        "description": "Internal notes for this purchase"
+                    },
+                    "subtotal_override": {
+                        "type": "integer",
+                        "description": "Override calculated subtotal (in cents)"
+                    },
+                    "total_tax_override": {
+                        "type": "integer",
+                        "description": "Override calculated tax (in cents)"
+                    },
+                    "total_discount_override": {
+                        "type": "integer",
+                        "description": "Override calculated discount (in cents)"
+                    },
+                    "total_override": {
+                        "type": "integer",
+                        "description": "Override final total (in cents)"
+                    },
+                    "timezone": {
+                        "type": "string",
+                        "default": "Asia/Kuala_Lumpur",
+                        "description": "Timezone for dates (e.g., Asia/Kuala_Lumpur)"
+                    },
+                    "email_message": {
+                        "type": "string",
+                        "description": "Custom message to include in email"
+                    }
+                }
+            },
+            "Product": {
+                "type": "object",
+                "required": [
+                    "name",
+                    "price"
+                ],
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Product name"
+                    },
+                    "price": {
+                        "type": "integer",
+                        "description": "Product price in cents (e.g., 1000 = RM 10.00)"
+                    },
+                    "quantity": {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Product quantity"
+                    },
+                    "discount": {
+                        "type": "integer",
+                        "default": 0,
+                        "description": "Discount amount in cents"
+                    },
+                    "tax_percent": {
+                        "type": "number",
+                        "default": 0,
+                        "description": "Tax percentage (e.g., 6 for 6% SST)"
+                    },
+                    "category": {
+                        "type": "string",
+                        "description": "Product category"
+                    }
+                }
+            },
+            "PaymentInfo": {
+                "type": "object",
+                "properties": {
+                    "is_outgoing": {
+                        "type": "boolean",
+                        "description": "Whether this is an outgoing payment"
+                    },
+                    "payment_type": {
+                        "type": "string",
+                        "description": "Type of payment (e.g., 'purchase')"
+                    },
+                    "amount": {
+                        "type": "integer",
+                        "description": "Payment amount in cents"
+                    },
+                    "currency": {
+                        "type": "string",
+                        "description": "Payment currency"
+                    },
+                    "net_amount": {
+                        "type": "integer",
+                        "description": "Net amount after fees"
+                    },
+                    "fee_amount": {
+                        "type": "integer",
+                        "description": "Transaction fee amount"
+                    },
+                    "paid_on": {
+                        "type": "integer",
+                        "description": "Unix timestamp when payment was completed"
+                    }
+                }
+            },
+            "TransactionData": {
+                "type": "object",
+                "properties": {
+                    "payment_method": {
+                        "type": "string",
+                        "description": "Payment method used (e.g., 'fpx', 'visa', 'mastercard')"
+                    },
+                    "country": {
+                        "type": "string",
+                        "description": "Country where payment originated"
+                    },
+                    "attempts": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "type": {
+                                    "type": "string",
+                                    "description": "Attempt type (e.g., 'execute')"
+                                },
+                                "successful": {
+                                    "type": "boolean",
+                                    "description": "Whether attempt was successful"
+                                },
+                                "payment_method": {
+                                    "type": "string",
+                                    "description": "Payment method used in this attempt"
+                                },
+                                "processing_time": {
+                                    "type": "integer",
+                                    "description": "Unix timestamp of processing"
+                                },
+                                "error": {
+                                    "type": "object",
+                                    "properties": {
+                                        "code": {
+                                            "type": "string"
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "PaymentMethod": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Payment method code (e.g., 'fpx', 'visa', 'mastercard', 'grabpay', 'tng')"
+                    },
+                    "display_name": {
+                        "type": "string",
+                        "description": "Human-readable payment method name"
+                    },
+                    "available": {
+                        "type": "boolean",
+                        "description": "Whether this payment method is available"
+                    }
+                }
+            },
+            "WebhookEvent": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "Webhook event ID"
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "purchase.paid",
+                            "purchase.payment_failure",
+                            "purchase.preauthorized",
+                            "purchase.refunded"
+                        ],
+                        "description": "Event type"
+                    },
+                    "purchase": {
+                        "$ref": "#/components/schemas/Purchase"
+                    },
+                    "created_on": {
+                        "type": "integer",
+                        "description": "Unix timestamp of event"
+                    }
+                }
+            }
+        }
+    },
+    "paths": {
+        "/purchases/": {
+            "post": {
+                "summary": "Create a purchase",
+                "description": "Create a new purchase/payment request. Returns a checkout_url where you should redirect the customer to complete payment.",
+                "operationId": "createPurchase",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Purchase"
+                            },
+                            "example": {
+                                "client": {
+                                    "email": "[email protected]",
+                                    "phone": "+60123456789",
+                                    "full_name": "John Doe"
+                                },
+                                "purchase": {
+                                    "products": [
+                                        {
+                                            "name": "Product Name",
+                                            "price": 5000,
+                                            "quantity": 2
+                                        }
+                                    ],
+                                    "currency": "MYR"
+                                },
+                                "brand_id": "your-brand-id-here",
+                                "reference": "ORDER-12345",
+                                "success_redirect": "https://yoursite.com/payment/success",
+                                "failure_redirect": "https://yoursite.com/payment/failed",
+                                "success_callback": "https://yoursite.com/api/webhooks/chip"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Purchase created successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Purchase"
+                                },
+                                "example": {
+                                    "id": "3c90c3cc-0d44-4b50-8888-8dd25736052a",
+                                    "status": "created",
+                                    "checkout_url": "https://gate.chip-in.asia/payment/3c90c3cc-0d44-4b50-8888-8dd25736052a",
+                                    "invoice_url": "https://gate.chip-in.asia/invoice/3c90c3cc-0d44-4b50-8888-8dd25736052a",
+                                    "client": {
+                                        "email": "[email protected]"
+                                    },
+                                    "purchase": {
+                                        "total": 10000,
+                                        "currency": "MYR"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - invalid parameters"
+                    },
+                    "401": {
+                        "description": "Unauthorized - invalid API key"
+                    }
+                }
+            }
+        },
+        "/purchases/{id}/": {
+            "get": {
+                "summary": "Get purchase details",
+                "description": "Retrieve details of a specific purchase by ID. Use this to check payment status.",
+                "operationId": "getPurchase",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "Purchase ID"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Purchase details retrieved",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Purchase"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Purchase not found"
+                    }
+                }
+            }
+        },
+        "/purchases/{id}/capture/": {
+            "post": {
+                "summary": "Capture authorized payment",
+                "description": "Capture a previously authorized payment (when skip_capture was used). Only for card payments.",
+                "operationId": "capturePurchase",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "amount": {
+                                        "type": "integer",
+                                        "description": "Amount to capture in cents (optional, defaults to full authorized amount)"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Payment captured successfully"
+                    }
+                }
+            }
+        },
+        "/purchases/{id}/release/": {
+            "post": {
+                "summary": "Release authorized payment",
+                "description": "Release (cancel) a previously authorized payment without capturing it.",
+                "operationId": "releasePurchase",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Payment released successfully"
+                    }
+                }
+            }
+        },
+        "/purchases/{id}/refund/": {
+            "post": {
+                "summary": "Refund a purchase",
+                "description": "Refund a paid purchase (full or partial refund).",
+                "operationId": "refundPurchase",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "amount": {
+                                        "type": "integer",
+                                        "description": "Amount to refund in cents (optional, defaults to full amount)"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Refund processed successfully"
+                    }
+                }
+            }
+        },
+        "/payment_methods/": {
+            "get": {
+                "summary": "List available payment methods",
+                "description": "Get list of payment methods available for your brand and currency. Use this to populate payment_method_whitelist.",
+                "operationId": "getPaymentMethods",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "brand_id",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "description": "Your brand ID"
+                    },
+                    {
+                        "name": "currency",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Currency code (e.g., MYR)"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Payment methods retrieved",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "available_payment_methods": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "example": [
+                                                "fpx",
+                                                "visa",
+                                                "mastercard",
+                                                "grabpay",
+                                                "tng",
+                                                "boost",
+                                                "shopeepay"
+                                            ]
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/public_key/": {
+            "get": {
+                "summary": "Get public key for webhook verification",
+                "description": "Retrieve the public key used to verify webhook signatures.",
+                "operationId": "getPublicKey",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Public key retrieved",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "public_key": {
+                                            "type": "string",
+                                            "description": "RSA public key in PEM format"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "webhooks": {
+        "purchase.paid": {
+            "post": {
+                "summary": "Purchase paid webhook",
+                "description": "Triggered when a purchase is successfully paid. Verify signature using public key from /public_key/ endpoint.",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WebhookEvent"
+                            },
+                            "example": {
+                                "id": "evt_123456",
+                                "type": "purchase.paid",
+                                "purchase": {
+                                    "id": "3c90c3cc-0d44-4b50-8888-8dd25736052a",
+                                    "status": "paid",
+                                    "reference": "ORDER-12345",
+                                    "payment": {
+                                        "amount": 10000,
+                                        "paid_on": 1619740800
+                                    },
+                                    "transaction_data": {
+                                        "payment_method": "fpx"
+                                    }
+                                },
+                                "created_on": 1619740800
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Webhook acknowledged"
+                    }
+                }
+            }
+        },
+        "purchase.payment_failure": {
+            "post": {
+                "summary": "Purchase payment failed webhook",
+                "description": "Triggered when a payment attempt fails.",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WebhookEvent"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Webhook acknowledged"
+                    }
+                }
+            }
+        },
+        "purchase.refunded": {
+            "post": {
+                "summary": "Purchase refunded webhook",
+                "description": "Triggered when a purchase is refunded.",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/WebhookEvent"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Webhook acknowledged"
+                    }
+                }
+            }
+        }
+    },
+    "x-integration-notes": {
+        "pricing_format": "All amounts are in cents. For RM 10.00, use 1000",
+        "webhook_verification": "Webhooks are signed. Verify using public key from /public_key/ endpoint",
+        "payment_flow": [
+            "1. Create purchase via POST /purchases/",
+            "2. Redirect customer to checkout_url",
+            "3. Customer completes payment",
+            "4. CHIP redirects to success_redirect",
+            "5. CHIP sends webhook to success_callback",
+            "6. Verify payment via GET /purchases/{id}/ or webhook"
+        ],
+        "supported_payment_methods": [
+            "fpx - FPX Online Banking",
+            "visa - Visa cards",
+            "mastercard - Mastercard",
+            "grabpay - GrabPay e-wallet",
+            "tng - Touch 'n Go e-wallet",
+            "boost - Boost e-wallet",
+            "shopeepay - ShopeePay e-wallet",
+            "razer - Razer Pay"
+        ],
+        "test_mode": "Use test API keys to create test purchases. Test cards: 4444 3333 2222 1111, CVV: 123",
+        "currencies_supported": [
+            "MYR",
+            "SGD",
+            "USD",
+            "EUR"
+        ],
+        "callback_vs_webhook": "success_callback is per-purchase. Webhooks are global and configured in dashboard."
+    }
+}

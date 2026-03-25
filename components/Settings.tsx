@@ -13,7 +13,7 @@ const ROLE_COLORS: Record<UserRole, string> = {
 
 export const Settings: React.FC = () => {
   const [settings, setSettings] = useState<SystemSettings | null>(null);
-  const [activeTab, setActiveTab] = useState<'receipt' | 'email' | 'chipin' | 'users' | 'promoCodes' | 'auditLog'>('receipt');
+  const [activeTab, setActiveTab] = useState<'receipt' | 'email' | 'chipin' | 'evoucher' | 'users' | 'promoCodes' | 'auditLog'>('receipt');
   const [msg, setMsg] = useState('');
 
   // Users tab
@@ -32,7 +32,12 @@ export const Settings: React.FC = () => {
 
   useEffect(() => {
     fetchSettings().then(s => {
-      if (!s.chipin) s.chipin = { enabled: false };
+      if (!s.chipin) s.chipin = { enabled: false, appUrl: 'https://vms.gptt.my' };
+      if (!s.chipin.appUrl) s.chipin.appUrl = 'https://vms.gptt.my';
+      if (!s.voucherPage) s.voucherPage = {
+        logoUrl: '', backgroundImage: '', primaryColor: '#0d9488',
+        website: '', footerText: '', contactEmail: '', contactPhone: ''
+      };
       setSettings(s);
     });
   }, []);
@@ -148,6 +153,7 @@ if (mail($input['to'], $input['subject'], $input['body'], $headers)) {
     { id: 'receipt', label: 'Receipt', icon: <Printer size={18}/> },
     { id: 'email', label: 'Email', icon: <Mail size={18}/> },
     { id: 'chipin', label: 'Chip-in', icon: <Zap size={18}/> },
+    { id: 'evoucher', label: 'E-Voucher', icon: <Globe size={18}/> },
     { id: 'users', label: 'Users', icon: <Users size={18}/> },
     { id: 'promoCodes', label: 'Promo Codes', icon: <Tag size={18}/> },
     { id: 'auditLog', label: 'Audit Log', icon: <Shield size={18}/> },
@@ -328,6 +334,19 @@ if (mail($input['to'], $input['subject'], $input['body'], $headers)) {
                       </div>
                     </div>
                   </div>
+                   {/* App URL field */}
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-5">
+                    <div className="flex items-start gap-3">
+                      <Globe size={20} className="text-gray-500 shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <h4 className="font-bold text-gray-800 mb-1">App URL (Domain)</h4>
+                        <p className="text-xs text-gray-500 mb-3">Your public domain — used in e-voucher links, QR codes, and email buttons.</p>
+                        <input className={inputClass} value={settings.chipin?.appUrl || ''}
+                          onChange={e => setSettings({ ...settings, chipin: { ...settings.chipin, appUrl: e.target.value } })}
+                          placeholder="https://vms.gptt.my" />
+                      </div>
+                    </div>
+                  </div>
                   <div className="bg-gray-50 border border-gray-200 rounded-xl p-5">
                     <div className="flex items-start gap-3">
                       <Globe size={20} className="text-gray-500 shrink-0 mt-0.5" />
@@ -361,7 +380,80 @@ if (mail($input['to'], $input['subject'], $input['body'], $headers)) {
               </div>
             )}
 
-            {/* ---- USERS TAB ---- */}
+            {/* ---- E-VOUCHER TEMPLATE TAB ---- */}
+            {activeTab === 'evoucher' && (
+              <div className="animate-in fade-in duration-300">
+                <h2 className="text-xl font-extrabold text-gray-900 mb-2 flex items-center gap-2"><Globe className="text-teal-600" /> E-Voucher Template</h2>
+                <p className="text-gray-500 text-sm mb-6">Customize how your e-voucher looks at <code>/voucher/:code</code>. Changes apply instantly to all voucher pages.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-5">
+                    {[
+                      { label: 'Logo URL', key: 'logoUrl', placeholder: 'https://your-site.com/logo.png' },
+                      { label: 'Left Panel Background Image', key: 'backgroundImage', placeholder: 'https://your-site.com/bg.jpg (optional)' },
+                      { label: 'Business Website', key: 'website', placeholder: 'https://gopengglampingpark.com' },
+                      { label: 'Contact Email', key: 'contactEmail', placeholder: 'booking@gopengglampingpark.com' },
+                      { label: 'Contact Phone', key: 'contactPhone', placeholder: '+60 132408857' },
+                    ].map(f => (
+                      <div key={f.key}>
+                        <label className={labelClass}>{f.label}</label>
+                        <input className={inputClass}
+                          value={(settings.voucherPage as any)?.[f.key] || ''}
+                          placeholder={f.placeholder}
+                          onChange={e => setSettings({ ...settings, voucherPage: { ...settings.voucherPage, [f.key]: e.target.value } })} />
+                      </div>
+                    ))}
+                    <div>
+                      <label className={labelClass}>Primary Color</label>
+                      <div className="flex items-center gap-3">
+                        <input type="color" value={settings.voucherPage?.primaryColor || '#0d9488'}
+                          onChange={e => setSettings({ ...settings, voucherPage: { ...settings.voucherPage, primaryColor: e.target.value } })}
+                          className="w-12 h-10 rounded-lg border border-gray-300 cursor-pointer" />
+                        <input className={inputClass} value={settings.voucherPage?.primaryColor || '#0d9488'}
+                          onChange={e => setSettings({ ...settings, voucherPage: { ...settings.voucherPage, primaryColor: e.target.value } })}
+                          placeholder="#0d9488" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={labelClass}>Footer / T&amp;C Text</label>
+                      <textarea className={inputClass} rows={3}
+                        value={settings.voucherPage?.footerText || ''}
+                        placeholder="This voucher is non-refundable and non-transferable."
+                        onChange={e => setSettings({ ...settings, voucherPage: { ...settings.voucherPage, footerText: e.target.value } })} />
+                    </div>
+                  </div>
+                  {/* Live Preview */}
+                  <div className="bg-gray-100 p-4 rounded-xl border border-gray-200">
+                    <p className="text-xs font-bold text-gray-400 uppercase mb-3 tracking-widest">Live Preview</p>
+                    <div style={{ display: 'flex', borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: 11 }}>
+                      <div style={{ width: 90, background: settings.voucherPage?.backgroundImage ? `url(${settings.voucherPage.backgroundImage}) center/cover` : settings.voucherPage?.primaryColor || '#0d9488', padding: '16px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                        {settings.voucherPage?.logoUrl && <img src={settings.voucherPage.logoUrl} alt="logo" style={{ maxWidth: 60, maxHeight: 30, objectFit: 'contain' }} />}
+                        <div style={{ background: 'white', padding: 4, borderRadius: 4, marginTop: 'auto' }}>
+                          <div style={{ width: 40, height: 40, background: '#e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: '#9ca3af' }}>QR</div>
+                        </div>
+                        {settings.voucherPage?.contactPhone && <p style={{ color: 'rgba(255,255,255,0.8)', textAlign: 'center', fontSize: 8 }}>{settings.voucherPage.contactPhone}</p>}
+                      </div>
+                      <div style={{ flex: 1, background: 'white', padding: '12px 10px' }}>
+                        <div style={{ fontSize: 7, color: settings.voucherPage?.primaryColor || '#0d9488', fontWeight: 700, marginBottom: 2 }}>ACCOMMODATION</div>
+                        <div style={{ fontSize: 11, fontWeight: 800, color: '#111827', marginBottom: 6, lineHeight: 1.2 }}>Weekland PROMO MATTRA</div>
+                        <div style={{ background: '#f0fdf4', border: `1.5px solid ${settings.voucherPage?.primaryColor || '#0d9488'}`, borderRadius: 6, padding: '4px 8px', marginBottom: 6 }}>
+                          <div style={{ fontSize: 8, color: '#6b7280' }}>VALUE</div>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: '#111827' }}>RM200.00</div>
+                        </div>
+                        <div style={{ background: '#fef9c3', border: '1.5px solid #ca8a04', borderRadius: 6, padding: '4px 8px', marginBottom: 6 }}>
+                          <div style={{ fontSize: 8, color: '#6b7280' }}>VALID UNTIL</div>
+                          <div style={{ fontSize: 11, fontWeight: 800, color: '#ca8a04' }}>31 Dec 2025</div>
+                          <div style={{ fontSize: 8, color: '#ca8a04' }}>185 days remaining</div>
+                        </div>
+                        <div style={{ fontFamily: 'monospace', fontSize: 9, fontWeight: 800, letterSpacing: 2, background: '#f3f4f6', padding: '4px 6px', borderRadius: 4 }}>GGP-A2TM-LJQT</div>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-3 text-center">Actual page at <code>/voucher/:code</code></p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+
             {activeTab === 'users' && (
               <div className="animate-in fade-in duration-300">
                 <div className="flex justify-between items-center mb-6">

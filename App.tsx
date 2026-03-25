@@ -11,6 +11,7 @@ import { Settings } from './components/Settings';
 import { Login } from './components/Login';
 import { OnlineStore } from './components/OnlineStore';
 import { VoucherCheck } from './components/VoucherCheck';
+import { VoucherPage } from './components/VoucherPage';
 import { PaymentSuccess, PaymentFailure } from './components/PaymentPages';
 import { getCurrentUser } from './services/voucherService';
 import { AppDataProvider } from './context/AppDataContext';
@@ -24,6 +25,7 @@ const getRoute = () => {
   if (path === '/store/success') return 'store-success';
   if (path === '/store/failure') return 'store-failure';
   if (path === '/check' || path === '/check/') return 'check';
+  if (path.startsWith('/voucher/') && path.length > '/voucher/'.length) return 'voucher';
   return null;
 };
 
@@ -66,6 +68,7 @@ const App: React.FC = () => {
   if (publicRoute === 'store-success') return <PaymentSuccess />;
   if (publicRoute === 'store-failure') return <PaymentFailure />;
   if (publicRoute === 'check') return <VoucherCheck />;
+  if (publicRoute === 'voucher') return <VoucherPage />;
 
   // --- AUTHENTICATED ROUTES ---
   if (!user) return <Login onLogin={handleLogin} />;

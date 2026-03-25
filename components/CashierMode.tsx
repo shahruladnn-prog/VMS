@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { fetchVouchers, updateVoucher, deleteVoucher, getCurrentUser, fetchSettings } from '../services/voucherService';
-import { createChipinPurchase, markChipinPurchaseAsPaid } from '../services/chipinService';
 import { Voucher, VoucherStatus, SystemSettings } from '../types';
 import {
   Printer, CreditCard, Smartphone, DollarSign, RefreshCcw, X, Image as ImageIcon,
@@ -17,7 +16,7 @@ export const CashierMode: React.FC = () => {
   // Payment Flow State
   const [confirmingMethod, setConfirmingMethod] = useState<'Cash' | 'QR' | 'Terminal' | null>(null);
   const [amountReceived, setAmountReceived] = useState<string>('');
-  const [sendChipinReceipt, setSendChipinReceipt] = useState(true);
+  const [sendEmailReceipt, setSendEmailReceipt] = useState(true);
 
   // Receipt State
   const [showReceipt, setShowReceipt] = useState(false);
@@ -111,50 +110,46 @@ export const CashierMode: React.FC = () => {
   };
 
   // --- Email Helpers ---
-  const generateEmailBody = (vouchers: Voucher[]) => {
-    const itemsHtml = vouchers.map(item => `
-      <div style="border-bottom:1px dashed #ddd; padding: 10px 0;">
-          <p style="margin:0; font-weight:bold;">${item.voucherDetails.name}</p>
-          <p style="margin:0; font-size:12px; font-family:monospace;">${item.voucherCode}</p>
-      </div>
-    `).join('');
+  const generateEmailBody = (vouchers: Voucher[]): string => {
+    const appUrl = settings?.chipin?.appUrl || 'https://vms.gptt.my';
+    const biz = settings?.receipt?.businessName || 'Gopeng Glamping Park';
+    const primary = settings?.voucherPage?.primaryColor || '#0d9488';
+    const vp = settings?.voucherPage;
+
+    const voucherItems = vouchers.map(v => {
+      const expiryFormatted = v.dates?.expiryDate
+        ? new Date(v.dates.expiryDate).toLocaleDateString('en-MY', { day: 'numeric', month: 'long', year: 'numeric' })
+        : 'N/A';
+      const voucherUrl = `${appUrl}/voucher/${v.voucherCode}`;
+      return `
+        <div style="background:#f9fafb; border:1px solid #e5e7eb; border-radius:10px; padding:16px; margin:8px 0;">
+          <p style="margin:0 0 4px; font-weight:700; font-size:15px; color:#111827;">${v.voucherDetails.name}</p>
+          <p style="margin:0 0 4px; font-size:13px; color:#374151;">Value: <strong>RM${v.voucherDetails.value.toFixed(2)}</strong></p>
+          <p style="margin:0 0 4px; font-size:13px; color:#374151;">Code: <strong style="font-family:monospace; letter-spacing:2px;">${v.voucherCode}</strong></p>
+          <p style="margin:0 0 8px; font-size:13px; color:#dc2626; font-weight:700;">⚠️ Valid Until: ${expiryFormatted}</p>
+          <a href="${voucherUrl}" style="background:${primary}; color:white; text-decoration:none; padding:8px 16px; border-radius:6px; font-size:13px; font-weight:700; display:inline-block;">View E-Voucher →</a>
+        </div>
+      `;
+    }).join('');
 
     return `
-      <div style="font-family: Arial, sans-serif; max-width: 400px; margin: auto; border: 1px solid #ddd; padding: 20px; border-radius: 8px;">
-          <h2 style="color: #0f766e; text-align: center;">${settings?.receipt.businessName}</h2>
-          <p style="text-align: center; color: #555;">Thank you for your purchase!</p>
-          <hr style="border:0; border-top:1px solid #eee; margin: 20px 0;" />
-          ${itemsHtml}
-          <div style="margin-top: 20px; text-align: center;">
-              <p style="font-weight: bold;">Total: RM${vouchers.reduce((s, x) => s + x.voucherDetails.value, 0).toFixed(2)}</p>
-          </div>
-          <p style="font-size: 12px; color: #999; text-align: center; margin-top: 30px;">
-              ${settings?.receipt.footerMessage}
-          </p>
+      <div style="font-family:Arial,sans-serif; max-width:600px; margin:auto; background:#f9f9f9; border-radius:12px; overflow:hidden;">
+        <div style="background:${primary}; padding:28px 24px; text-align:center;">
+          ${vp?.logoUrl ? `<img src="${vp.logoUrl}" alt="${biz}" style="max-height:50px; margin-bottom:10px;" />` : ''}
+          <h1 style="color:white; margin:0; font-size:20px;">🎫 Your E-Voucher is Ready!</h1>
+          <p style="color:rgba(255,255,255,0.8); margin:6px 0 0;">${biz}</p>
+        </div>
+        <div style="padding:28px 24px; background:white;">
+          <p style="color:#374151;">Dear <strong>${vouchers[0]?.clientName}</strong>,</p>
+          <p style="color:#374151;">Thank you for your purchase! Your e-voucher(s) are ready below.</p>
+          ${voucherItems}
+          <p style="color:#374151; margin-top:16px;">You can also view all your vouchers at: <a href="${appUrl}/check" style="color:${primary};">${appUrl}/check</a></p>
+        </div>
+        <div style="background:#f3f4f6; padding:16px 24px; text-align:center;">
+          <p style="color:#6b7280; font-size:12px; margin:0;">${vp?.footerText || 'Non-refundable. Subject to availability.'}</p>
+        </div>
       </div>
     `;
-  };
-
-  const sendToPHPServer = async (vouchers: Voucher[]) => {
-    setSendingEmail(true);
-    setEmailStatus('Connecting to server...');
-    if (!settings?.email.phpScriptUrl) {
-      setSendingEmail(false); setEmailStatus('Failed: Missing Script URL'); return;
-    }
-    try {
-      const body = generateEmailBody(vouchers);
-      await fetch(settings.email.phpScriptUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: vouchers[0].email, subject: `Your Receipt from ${settings?.receipt.businessName}`, body })
-      });
-      setSendingEmail(false);
-      setEmailStatus('Email sent via server');
-      setTimeout(() => setEmailStatus(''), 5000);
-    } catch (e) {
-      setSendingEmail(false);
-      setEmailStatus('Failed to connect to server');
-    }
   };
 
   const simulateSendEmail = (email: string) => {
@@ -168,6 +163,8 @@ export const CashierMode: React.FC = () => {
   };
 
   // --- Main Payment Processing ---
+  // POS payments: Chip-in NOT used (no hangs). Payment is cashier-confirmed directly.
+  // Email is sent via PHP script as branded e-voucher with link to /voucher/:code.
   const processPayment = async () => {
     if (!confirmingMethod) return;
     setProcessing(true);
@@ -179,51 +176,27 @@ export const CashierMode: React.FC = () => {
     const cashRec = confirmingMethod === 'Cash' ? parseFloat(amountReceived) : undefined;
     const changeAmt = confirmingMethod === 'Cash' ? balance : undefined;
 
-    let chipinPurchaseId: string | undefined;
-
-    // Step 1: Create Chip-in purchase (if enabled and toggled on)
-    if (settings?.chipin?.enabled && sendChipinReceipt && selectedVouchers[0]?.email) {
-      try {
-        setChipinStatus('Creating Chip-in receipt...');
-        const result = await createChipinPurchase({
-          customerEmail: selectedVouchers[0].email,
-          customerName: selectedVouchers[0].clientName,
-          vouchers: selectedVouchers.map(v => ({
-            code: v.voucherCode,
-            name: v.voucherDetails.name,
-            value: v.voucherDetails.value,
-          })),
-          type: 'pos',
-        });
-        chipinPurchaseId = result.purchaseId;
-        setChipinStatus('Marking as paid...');
-        await markChipinPurchaseAsPaid(result.purchaseId);
-        setChipinStatus('✅ Receipt email sent via Chip-in');
-      } catch (err: any) {
-        console.error('Chip-in error:', err);
-        setChipinStatus(`⚠️ Chip-in failed: ${err.message}`);
-        // Don't block payment — just log and continue
-      }
-    }
-
-    // Step 2: Update Firestore for each voucher
+    // Step 1: Update Firestore — activate vouchers immediately (no Chip-in dependency)
     for (const voucher of selectedVouchers) {
       const updated: Voucher = {
         ...voucher,
         status: VoucherStatus.ACTIVE,
         saleChannel: 'POS',
-        chipinPurchaseId: chipinPurchaseId,
         financials: {
           paymentMethod: confirmingMethod,
           receiptNo,
           invoiceNo,
           cashReceived: cashRec,
-          changeAmount: changeAmt
+          changeAmount: changeAmt,
+        },
+        dates: {
+          ...voucher.dates,
+          paidAt: new Date().toISOString(),
         },
         workflow: {
           ...voucher.workflow,
-          cashierName: currentUser?.fullName || 'Unknown Cashier'
-        }
+          cashierName: currentUser?.fullName || 'Unknown Cashier',
+        },
       };
       await updateVoucher(updated);
       processedBatch.push(updated);
@@ -236,15 +209,23 @@ export const CashierMode: React.FC = () => {
     setSelectedIds(new Set());
     refreshQueue();
 
-    // Step 3: Legacy email (only if Chip-in NOT used or failed)
-    if (!chipinPurchaseId && settings?.email.enabled && processedBatch.length > 0) {
-      if (settings.email.provider === 'CustomPHP') {
-        sendToPHPServer(processedBatch);
-      } else {
-        simulateSendEmail(processedBatch[0].email);
+    // Step 2: Send branded email receipt (non-blocking)
+    const email = processedBatch[0]?.email;
+    if (sendEmailReceipt && email && settings?.email.enabled) {
+      const body = generateEmailBody(processedBatch);
+      const subject = `🎫 Your ${settings?.receipt?.businessName || 'Gopeng Glamping Park'} E-Voucher`;
+      if (settings.email.provider === 'CustomPHP' && settings.email.phpScriptUrl) {
+        fetch(settings.email.phpScriptUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: email, subject, body }),
+        }).then(() => setEmailStatus('Email sent ✅')).catch(() => setEmailStatus('Email failed ⚠️'));
+      } else if (settings.email.provider === 'Simulation') {
+        simulateSendEmail(email);
       }
     }
   };
+
 
   const closeReceipt = () => { setShowReceipt(false); setReceiptData([]); };
 
@@ -371,20 +352,21 @@ export const CashierMode: React.FC = () => {
               <div className="mb-4 bg-teal-50 border border-teal-200 rounded-xl p-4 flex items-center gap-3">
                 <Send size={18} className="text-teal-600 shrink-0" />
                 <div className="flex-1">
-                  <p className="font-bold text-teal-800 text-sm">Send Chip-in Receipt Email</p>
-                  <p className="text-xs text-teal-600">Sends to: {selectedVouchers[0].email}</p>
+                  <p className="font-bold text-teal-800 text-sm">Send Email Receipt</p>
+                  <p className="text-xs text-teal-600">Sends branded e-voucher to: {selectedVouchers[0].email}</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={sendChipinReceipt}
-                    onChange={e => setSendChipinReceipt(e.target.checked)}
+                    checked={sendEmailReceipt}
+                    onChange={e => setSendEmailReceipt(e.target.checked)}
                     className="sr-only peer"
                   />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-600" />
                 </label>
               </div>
             )}
+
 
             <div>
               <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">

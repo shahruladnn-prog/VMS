@@ -11,6 +11,7 @@ export interface ChipinVoucherItem {
 export interface CreatePurchasePayload {
   customerEmail: string;
   customerName?: string;
+  customerPhone?: string;
   vouchers: ChipinVoucherItem[];
   type: 'pos' | 'online';
   successUrl?: string;

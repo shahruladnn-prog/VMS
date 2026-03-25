@@ -1,11 +1,12 @@
 // api/create-purchase.js
 // Vercel Serverless Function — creates a Chip-in purchase securely server-side
-// Set these in Vercel Dashboard > Project > Environment Variables:
-//   CHIPIN_API_KEY  = jlOwwtRAHoMl4Bg7ASwa8cL_eUwe_g-Fb9Uc4W5elggVkUXOiSRux8ZdPAgytdkqOdytlvH_Vkuafb9uXsU-mg==  (test key)
-//   CHIPIN_BRAND_ID = 38675dc8-983d-4b93-84bd-6c9bef48150d
+//
+// Required Vercel env vars:
+//   CHIPIN_API_KEY  = your Chip-in secret API key
+//   CHIPIN_BRAND_ID = your Chip-in brand UUID
+//   APP_URL         = https://vms.gptt.my (used for success_callback)
 
 export default async function handler(req, res) {
-  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -15,49 +16,59 @@ export default async function handler(req, res) {
 
   const CHIPIN_API_KEY = process.env.CHIPIN_API_KEY;
   const CHIPIN_BRAND_ID = process.env.CHIPIN_BRAND_ID;
+  const APP_URL = process.env.APP_URL || 'https://vms.gptt.my';
 
   if (!CHIPIN_API_KEY || !CHIPIN_BRAND_ID) {
-    return res.status(500).json({ error: 'Chip-in API credentials not configured in environment variables.' });
+    return res.status(500).json({ error: 'Chip-in API credentials not configured.' });
   }
 
-  const { customerEmail, customerName, vouchers, type, successUrl, failureUrl } = req.body;
+  const { customerEmail, customerName, customerPhone, vouchers, type, successUrl, failureUrl } = req.body;
 
   if (!customerEmail || !vouchers || vouchers.length === 0) {
     return res.status(400).json({ error: 'Missing required fields: customerEmail, vouchers' });
   }
 
-  // Build products array for Chip-in — each voucher is a separate product line
+  // Each voucher is a separate product line in Chip-in
+  // price is in cents (e.g. RM50.00 = 5000)
   const products = vouchers.map((v) => ({
-    name: `${v.name} — Code: ${v.code}`,
-    price: Math.round(v.value * 100), // Chip-in uses cents (e.g. RM50.00 = 5000)
+    name: v.name,
+    price: Math.round(v.value * 100),
     quantity: 1,
   }));
 
-  // Build the friendly email message with all voucher codes
-  const codeList = vouchers.map((v) => v.code).join(', ');
+  // Build human-readable message showing product names + codes
+  const voucherLines = vouchers.map((v) => `• ${v.name} (Code: ${v.code})`).join('\n');
   const emailMessage =
-    vouchers.length === 1
-      ? `Your voucher code is ${vouchers[0].code}. Please present this at redemption.`
-      : `Your voucher codes are: ${codeList}. Please present these at redemption.`;
+    `Thank you for your purchase! Voucher details:\n${voucherLines}\n\nView and download your e-voucher at: ${APP_URL}/voucher/${vouchers[0].code}`;
+
+  // Reference field: comma-separated voucher codes — used for cross-referencing
+  const reference = vouchers.map(v => v.code).join(',');
 
   const body = {
     brand_id: CHIPIN_BRAND_ID,
-    send_receipt: true,
+    send_receipt: false,        // We send our own branded email via webhook
+    reference,                  // Voucher codes for traceability
     client: {
       email: customerEmail,
       full_name: customerName || '',
+      phone: customerPhone || '',
     },
     purchase: {
       products,
       currency: 'MYR',
       email_message: emailMessage,
+      timezone: 'Asia/Kuala_Lumpur',
     },
+    // success_callback: Chip-in calls this URL immediately on payment success
+    // This is more reliable than global webhook for per-purchase activation
+    success_callback: `${APP_URL}/api/webhook`,
   };
 
-  // Only add redirects for online purchases (not POS mark_as_paid flow)
+  // Add redirects for online purchases
   if (type === 'online') {
     if (successUrl) body.success_redirect = successUrl;
     if (failureUrl) body.failure_redirect = failureUrl;
+    body.cancel_redirect = failureUrl || `${APP_URL}/store`;
   }
 
   try {
@@ -74,7 +85,10 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       console.error('Chip-in API error:', data);
-      return res.status(response.status).json({ error: data.message || 'Chip-in API error', details: data });
+      return res.status(response.status).json({
+        error: data.message || 'Chip-in API error',
+        details: data,
+      });
     }
 
     return res.status(200).json({
@@ -82,6 +96,7 @@ export default async function handler(req, res) {
       checkoutUrl: data.checkout_url || null,
       status: data.status,
     });
+
   } catch (err) {
     console.error('create-purchase error:', err);
     return res.status(500).json({ error: 'Internal server error', message: err.message });

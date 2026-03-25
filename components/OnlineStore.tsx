@@ -99,63 +99,85 @@ export const OnlineStore: React.FC = () => {
     setShowTermsModal(false);
 
     try {
-      const vouchersToCreate: Voucher[] = [];
-      const allCodes: { code: string; name: string; value: number }[] = [];
-
-      // Calculate per-item discounted ratio
+      // Calculate per-item discounted value (promo applied proportionally)
       const discountRatio = cartTotal > 0 ? finalTotal / cartTotal : 1;
+
+      // Build the list of codes/items for Chip-in FIRST (before Firestore save)
+      const allCodes: { code: string; name: string; value: number }[] = [];
+      const vouchersMeta: Array<{
+        code: string; name: string; category: string; terms: string;
+        image?: string; expiryDate: string; originalValue: number; discountedValue: number;
+      }> = [];
 
       cartItems.forEach(item => {
         const expiryDate = item.defaultExpiryDate
           ? new Date(item.defaultExpiryDate).toISOString()
           : new Date(new Date().setFullYear(new Date().getFullYear() + 2)).toISOString();
-
-        const itemDiscountedValue = Math.round(item.value * discountRatio * 100) / 100;
+        const discountedValue = Math.round(item.value * discountRatio * 100) / 100;
 
         for (let i = 0; i < item.quantity; i++) {
           const code = generateVoucherCode();
-          allCodes.push({ code, name: item.name, value: itemDiscountedValue });
-          vouchersToCreate.push({
-            id: crypto.randomUUID(),
-            voucherCode: code,
-            clientName: customerName,
-            phoneNumber: customerPhone,
-            email: customerEmail,
-            voucherDetails: { name: item.name, category: item.category, value: item.value, terms: item.terms, image: item.image },
-            eventSource: 'Online Store',
-            status: VoucherStatus.PENDING_PAYMENT,
-            saleChannel: 'Online',
-            workflow: { salesPersonName: 'Online Store' },
-            dates: { soldAt: new Date().toISOString(), expiryDate },
-            financials: { paymentMethod: 'Online' },
-            redemption: {}
+          allCodes.push({ code, name: item.name, value: discountedValue });
+          vouchersMeta.push({
+            code, name: item.name, category: item.category, terms: item.terms,
+            image: item.image, expiryDate, originalValue: item.value, discountedValue,
           });
         }
       });
 
-      await createBatchVouchers(vouchersToCreate);
-
+      // STEP 1: Create Chip-in purchase FIRST — get the purchase ID
+      // This is critical: we need chipinPurchaseId BEFORE saving vouchers so the
+      // webhook can find them when payment completes.
       const result = await createChipinPurchase({
         customerEmail,
         customerName,
+        customerPhone,
         vouchers: allCodes,
         type: 'online',
         successUrl: `${window.location.origin}/store/success`,
-        failureUrl: `${window.location.origin}/store/failure`,
+        failureUrl: `${window.location.origin}/store`,
       });
 
-      if (result.checkoutUrl) {
-        window.location.href = result.checkoutUrl;
-      } else {
+      if (!result.checkoutUrl) {
         throw new Error('No checkout URL returned from payment gateway.');
       }
+
+      // STEP 2: Save vouchers WITH the chipinPurchaseId so webhook can activate them
+      const vouchersToCreate: Voucher[] = vouchersMeta.map(meta => ({
+        id: crypto.randomUUID(),
+        voucherCode: meta.code,
+        clientName: customerName,
+        phoneNumber: customerPhone,
+        email: customerEmail,
+        voucherDetails: {
+          name: meta.name,
+          category: meta.category,
+          value: meta.originalValue,     // Store original value for display
+          terms: meta.terms,
+          image: meta.image,
+        },
+        eventSource: 'Online Store',
+        status: VoucherStatus.PENDING_PAYMENT,
+        saleChannel: 'Online',
+        workflow: { salesPersonName: 'Online Store' },
+        dates: { soldAt: new Date().toISOString(), expiryDate: meta.expiryDate },
+        financials: { paymentMethod: 'Online' },
+        redemption: {},
+        chipinPurchaseId: result.purchaseId,  // ← KEY: links voucher to Chip-in purchase
+      }));
+
+      await createBatchVouchers(vouchersToCreate);
+
+      // STEP 3: Redirect to Chip-in checkout
+      window.location.href = result.checkoutUrl;
+
     } catch (err: any) {
       setError(err.message || 'An error occurred. Please try again.');
       setSubmitting(false);
     }
   };
-
   if (loading) return (
+
     <div className="min-h-screen bg-gradient-to-b from-teal-900 to-teal-700 flex items-center justify-center">
       <Loader className="text-white animate-spin" size={40} />
     </div>

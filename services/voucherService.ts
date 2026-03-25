@@ -90,7 +90,17 @@ const DEFAULT_SETTINGS: SystemSettings = {
         phpScriptUrl: ''
     },
     chipin: {
-        enabled: false
+        enabled: false,
+        appUrl: 'https://vms.gptt.my'
+    },
+    voucherPage: {
+        logoUrl: '',
+        backgroundImage: '',
+        primaryColor: '#0d9488',
+        website: 'https://gopengglampingpark.com',
+        footerText: 'This voucher is non-refundable, non-transferable, and cannot be exchanged for cash. Booking must be made in advance.',
+        contactEmail: 'booking@gopengglampingpark.com',
+        contactPhone: '+60 132408857'
     }
 };
 
@@ -420,4 +430,14 @@ export const fetchSettings = async (): Promise<SystemSettings> => {
 
 export const saveSettings = async (settings: SystemSettings): Promise<void> => {
     await setDoc(doc(db, SETTINGS_COL, 'global'), settings);
+};
+
+// --- PUBLIC VOUCHER LOOKUP (no auth required) ---
+// Used by /voucher/:code public e-voucher page and /check page.
+// Firebase rules must allow public read on vouchers collection.
+export const fetchVoucherByCode = async (code: string): Promise<Voucher | null> => {
+    const q = query(collection(db, VOUCHERS_COL), where('voucherCode', '==', code.toUpperCase().trim()));
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) return null;
+    return snapshot.docs[0].data() as Voucher;
 };
