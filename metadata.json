@@ -1,0 +1,7 @@
+{
+  "name": "GGP VMS",
+  "description": "Enterprise-grade Voucher Management System with role-based workflows (Admin, Sales, Cashier, Operations).",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
