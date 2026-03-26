@@ -92,7 +92,9 @@ if (mail($input['to'], $input['subject'], $input['body'], $headers, "-f" . $from
 
   // --- User Handlers ---
   const handleSaveUser = async () => {
-    if (!editingUser?.username || !editingUser.fullName || !editingUser.roles?.length) return;
+    if (!editingUser?.username) return alert('Please enter a Username');
+    if (!editingUser?.fullName) return alert('Please enter a Full Name');
+    if (!editingUser?.roles?.length) return alert('Please assign at least one Role');
     const user: User = {
       username: editingUser.username,
       password: editingUser.password || '1234',
@@ -124,19 +126,26 @@ if (mail($input['to'], $input['subject'], $input['body'], $headers, "-f" . $from
 
   // --- Promo Code Handlers ---
   const handleSavePromo = async () => {
-    if (!editingPromo?.code || !editingPromo.label || !editingPromo.discountValue) return;
-    const promo: PromoCode = {
-      id: editingPromo.id || crypto.randomUUID(),
-      code: editingPromo.code.toUpperCase(),
-      label: editingPromo.label,
-      discountType: editingPromo.discountType || 'percentage',
-      discountValue: Number(editingPromo.discountValue),
-      isActive: editingPromo.isActive ?? true,
-      minCartValue: editingPromo.minCartValue ? Number(editingPromo.minCartValue) : undefined,
-    };
-    await savePromoCode(promo);
-    setEditingPromo(null);
-    loadPromoCodes();
+    if (!editingPromo?.code) return alert('Please enter a Promo Code (e.g. SAVE10)');
+    if (!editingPromo?.label) return alert('Please enter a Label / Description');
+    if (!editingPromo?.discountValue) return alert('Please enter a Discount Value');
+
+    try {
+      const promo: PromoCode = {
+        id: editingPromo.id || (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2)),
+        code: editingPromo.code.toUpperCase(),
+        label: editingPromo.label,
+        discountType: editingPromo.discountType || 'percentage',
+        discountValue: Number(editingPromo.discountValue),
+        isActive: editingPromo.isActive ?? true,
+        minCartValue: editingPromo.minCartValue ? Number(editingPromo.minCartValue) : undefined,
+      };
+      await savePromoCode(promo);
+      setEditingPromo(null);
+      loadPromoCodes();
+    } catch (e: any) {
+      alert("Error saving: " + e.message);
+    }
   };
 
   const handleDeletePromo = async (id: string) => {
