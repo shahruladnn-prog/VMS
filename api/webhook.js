@@ -168,9 +168,9 @@ export default async function handler(req, res) {
     await batch.commit();
     console.log(`Webhook: activated ${activatedVouchers.length} voucher(s) for purchaseId=${purchaseId}`);
 
-    // Send branded email with voucher link (non-blocking)
+    // Send branded email with voucher link (BLOCKING to survive Vercel lambda freeze)
     if (settings) {
-      sendVoucherEmail(settings, activatedVouchers).catch(e =>
+      await sendVoucherEmail(settings, activatedVouchers).catch(e =>
         console.warn('Webhook: email send error:', e.message)
       );
     }
