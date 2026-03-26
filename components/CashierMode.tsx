@@ -542,7 +542,11 @@ export const CashierMode: React.FC = () => {
               </div>
             )}
 
-            <div className="p-6 overflow-y-auto bg-white font-mono text-sm print-only" id="receipt-area">
+            <div 
+              className={`p-6 overflow-y-auto bg-white font-mono text-sm print-only mx-auto ${settings.receipt.printerWidth === '58mm' ? 'text-[10px]' : ''}`} 
+              id="receipt-area"
+              style={{ maxWidth: settings.receipt.printerWidth === '58mm' ? '58mm' : '80mm', width: '100%' }}
+            >
               <div className="text-center mb-4">
                 <h2 className="text-xl font-bold text-black uppercase">{settings.receipt.businessName}</h2>
                 {settings.receipt.businessRegNo && <p className="text-[10px] text-gray-600">({settings.receipt.businessRegNo})</p>}

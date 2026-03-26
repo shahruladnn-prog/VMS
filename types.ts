@@ -91,6 +91,7 @@ export interface SystemSettings {
     headerMessage: string;
     footerMessage: string;
     showLogo: boolean;
+    printerWidth?: '80mm' | '58mm';
   };
   email: {
     enabled: boolean;

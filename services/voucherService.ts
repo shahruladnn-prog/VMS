@@ -79,7 +79,8 @@ const DEFAULT_SETTINGS: SystemSettings = {
         phone: '+60 12-345 6789',
         headerMessage: 'Thank you for visiting!',
         footerMessage: 'Please present QR code at counter.',
-        showLogo: true
+        showLogo: true,
+        printerWidth: '80mm'
     },
     email: {
         enabled: true,

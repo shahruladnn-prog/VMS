@@ -215,10 +215,18 @@ if (mail($input['to'], $input['subject'], $input['body'], $headers, "-f" . $from
                           onChange={e => setSettings({ ...settings, receipt: { ...settings.receipt, [f.key]: e.target.value } })} />
                       </div>
                     ))}
+                    <div>
+                      <label className={labelClass}>Printer Paper Width</label>
+                      <select className={inputClass} value={settings.receipt.printerWidth || '80mm'}
+                        onChange={e => setSettings({ ...settings, receipt: { ...settings.receipt, printerWidth: e.target.value as '80mm' | '58mm' } })}>
+                        <option value="80mm">Standard Thermal (80mm)</option>
+                        <option value="58mm">Compact Thermal (58mm)</option>
+                      </select>
+                    </div>
                   </div>
                   <div className="bg-gray-100 p-6 rounded-xl border border-gray-200 flex flex-col items-center justify-center">
-                    <p className="text-xs font-bold text-gray-400 uppercase mb-4 tracking-widest">Live Preview (80mm)</p>
-                    <div className="bg-white p-4 w-64 shadow-lg text-xs font-mono text-center border-b-4 border-dashed border-gray-300">
+                    <p className="text-xs font-bold text-gray-400 uppercase mb-4 tracking-widest">Live Preview ({settings.receipt.printerWidth || '80mm'})</p>
+                    <div className={`bg-white p-4 shadow-lg text-xs font-mono text-center border-b-4 border-dashed border-gray-300 transition-all ${settings.receipt.printerWidth === '58mm' ? 'w-48 text-[10px]' : 'w-64'}`}>
                       <div className="font-bold text-lg">{settings.receipt.businessName}</div>
                       <div className="text-[10px] text-gray-500 mb-1">({settings.receipt.businessRegNo})</div>
                       <div className="text-gray-600">{settings.receipt.addressLine1}</div>
