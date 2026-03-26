@@ -28,6 +28,7 @@ export interface VoucherTemplate {
   isActive: boolean;
   defaultExpiryDate?: string;
   terms: string;
+  highlights?: string;
   image?: string;
 }
 

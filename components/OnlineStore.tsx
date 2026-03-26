@@ -361,16 +361,22 @@ export const OnlineStore: React.FC = () => {
       {/* ===== VOUCHER DETAIL MODAL ===== */}
       {selectedVoucher && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setSelectedVoucher(null)}>
-          <div className="bg-gray-900 border border-white/20 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl animate-in zoom-in duration-200"
+          <div className="bg-gray-900 border border-teal-800/60 shadow-[0_0_50px_rgba(13,148,136,0.15)] rounded-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto animate-in zoom-in duration-200"
             onClick={e => e.stopPropagation()}>
             {selectedVoucher.image ? (
-              <img src={selectedVoucher.image} alt={selectedVoucher.name} className="w-full h-56 object-cover rounded-t-2xl" />
+              <div className="relative group bg-black/50 rounded-t-2xl">
+                <img src={selectedVoucher.image} alt={selectedVoucher.name} className="w-full max-h-96 object-contain" />
+                <a href={selectedVoucher.image} download={`${selectedVoucher.name.replace(/\s+/g, '_')}_Poster.jpg`} target="_blank" rel="noopener noreferrer" 
+                   className="absolute bottom-4 right-4 bg-black/80 border border-white/20 hover:bg-black text-white px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 backdrop-blur-md transition-all shadow-xl opacity-90 hover:opacity-100 hover:scale-105 active:scale-95">
+                  <Download size={16}/> Download Full Poster
+                </a>
+              </div>
             ) : (
-              <div className="w-full h-48 bg-gradient-to-br from-teal-700 to-teal-500 rounded-t-2xl flex items-center justify-center">
-                <Tag size={64} className="text-white/30" />
+              <div className="w-full h-48 bg-gradient-to-br from-teal-800 to-teal-600 rounded-t-2xl flex items-center justify-center">
+                <Tag size={64} className="text-white/20" />
               </div>
             )}
-            <div className="p-6">
+            <div className="p-6 md:p-8">
               <div className="flex justify-between items-start mb-1">
                 <div>
                   <h2 className="text-white font-extrabold text-2xl">{selectedVoucher.name}</h2>
@@ -380,19 +386,35 @@ export const OnlineStore: React.FC = () => {
               </div>
 
               {selectedVoucher.defaultExpiryDate && (
-                <p className="text-teal-400 text-xs mt-2 mb-4">📅 Valid until: {selectedVoucher.defaultExpiryDate}</p>
-              )}
-
-              {selectedVoucher.terms && (
-                <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6">
-                  <h4 className="text-teal-300 text-xs font-extrabold uppercase mb-2">Terms & Conditions</h4>
-                  <p className="text-teal-100 text-sm leading-relaxed">{selectedVoucher.terms}</p>
+                <div className="inline-flex items-center gap-2 bg-rose-500/10 border border-rose-500/30 text-rose-300 font-bold px-3 py-1.5 rounded-lg text-xs mt-3 mb-5">
+                  📅 Valid until: {selectedVoucher.defaultExpiryDate}
                 </div>
               )}
 
-              <div className="flex gap-3">
+              {selectedVoucher.highlights && (
+                <div className="bg-teal-900/40 border border-teal-500/30 rounded-xl p-5 mb-5 shadow-inner">
+                  <h4 className="text-teal-300 text-xs font-extrabold uppercase tracking-widest mb-3 flex items-center gap-2">✨ Package Highlights</h4>
+                  <ul className="text-teal-50 space-y-2 text-sm ml-1 font-medium">
+                    {selectedVoucher.highlights.split('\n').filter(h => h.trim().length > 0).map((highlight, idx) => (
+                      <li key={idx} className="flex items-start gap-2">
+                         <span className="text-teal-400 mt-0.5 font-bold">•</span> 
+                         <span className="leading-snug">{highlight.replace(/^[-*]\s/, '')}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {selectedVoucher.terms && (
+                <div className="bg-black/30 border border-white/10 rounded-xl p-5 mb-6">
+                  <h4 className="text-gray-400 text-[11px] font-extrabold uppercase tracking-widest mb-3">Terms & Conditions</h4>
+                  <div className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap font-medium">{selectedVoucher.terms}</div>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
                 <button onClick={() => setSelectedVoucher(null)}
-                  className="flex-1 py-3 border border-white/20 text-white rounded-xl font-bold hover:bg-white/10 transition-colors">
+                  className="flex-1 py-4 border-2 border-white/10 text-white rounded-xl font-bold hover:bg-white/10 transition-colors">
                   Close
                 </button>
                 <button onClick={() => { updateCart(selectedVoucher.id, 1); setSelectedVoucher(null); }}

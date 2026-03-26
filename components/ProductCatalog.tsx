@@ -32,6 +32,7 @@ export const ProductCatalog: React.FC = () => {
         isActive: editing.isActive ?? true,
         defaultExpiryDate: editing.defaultExpiryDate || undefined,
         terms: editing.terms || '',
+        highlights: editing.highlights || '',
         image: editing.image
       };
       await saveTemplate(template);
@@ -215,6 +216,17 @@ export const ProductCatalog: React.FC = () => {
                             onChange={e => setEditing({...editing, defaultExpiryDate: e.target.value})} 
                         />
                         <p className="text-xs text-gray-400 mt-1 font-medium">* Sales terminal will default to this date.</p>
+                    </div>
+
+                    <div>
+                        <label className={labelClass}>Key Highlights <span className="text-gray-400 normal-case">(Optional, separate by line)</span></label>
+                        <textarea 
+                            rows={3}
+                            className={inputClass} 
+                            value={editing.highlights || ''} 
+                            onChange={e => setEditing({...editing, highlights: e.target.value})} 
+                            placeholder="- Premium Weekend Package&#10;- Complimentary Breakfast Included"
+                        />
                     </div>
 
                     <div>
