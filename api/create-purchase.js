@@ -42,7 +42,7 @@ export default async function handler(req, res) {
   - Voucher Code: ${v.code}
   - Link: ${APP_URL}/voucher/${v.code}`).join('\n\n');
 
-  const emailMessage = `${vouchers[0].name} E-Voucher! 🏕️
+  const emailMessage = `${vouchers[0].name} E-Voucher!
 
 Dear ${customerName || 'Customer'},
 
@@ -50,7 +50,7 @@ Thank you for choosing us. We are thrilled to have you!
 Please remember to download your e-vouchers and keep a digital or printed copy safe for your records.
 
 ===========================================================
-🛒 ORDER SUMMARY
+ORDER SUMMARY
 ===========================================================
 
 ${voucherLines}
@@ -58,22 +58,22 @@ ${voucherLines}
 *(Note: If you cannot click the links above, please copy the full URL and paste it into your web browser.)*
 
 ===========================================================
-📝 HOW TO REDEEM YOUR VOUCHER
+HOW TO REDEEM YOUR VOUCHER
 ===========================================================
 To secure your slot, please contact our team via WhatsApp at the respective site locations listed below. Our sales team will be happy to assist you with your booking:
 
-➤ GOPENG GLAMPING PARK: +6013-240 8857 
-➤ GLAMPING WETLAND PUTRAJAYA: +6013-347 8857 
-➤ PUSAT REKREASI AIR PUTRAJAYA: +6013-262 8857 
-➤ PUTRAJAYA WETLAND ADVENTURE PARK: +6018-701 8557 
+- GOPENG GLAMPING PARK: +6013-240 8857 
+- GLAMPING WETLAND PUTRAJAYA: +6013-347 8857 
+- PUSAT REKREASI AIR PUTRAJAYA: +6013-262 8857 
+- PUTRAJAYA WETLAND ADVENTURE PARK: +6018-701 8557 
 
 ===========================================================
-⚠️ IMPORTANT REMINDER
+IMPORTANT REMINDER
 ===========================================================
 PLEASE REDEEM AND BOOK YOUR SLOT AS EARLY AS POSSIBLE. 
 We highly recommend not waiting until your voucher is near its expiry date to avoid any booking disappointments.
 
-We can’t wait to welcome you to our place and provide you with an unforgettable experience!
+We can't wait to welcome you to our place and provide you with an unforgettable experience!
 
 Best regards,
 
