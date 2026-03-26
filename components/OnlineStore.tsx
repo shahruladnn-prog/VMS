@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { fetchTemplates, generateVoucherCode, createBatchVouchers, validatePromoCode } from '../services/voucherService';
 import { createChipinPurchase } from '../services/chipinService';
 import { VoucherTemplate, Voucher, VoucherStatus, PromoCode } from '../types';
-import { ShoppingCart, Plus, Minus, Tag, ChevronRight, Loader, User, Mail, Phone, Info, X, CheckCircle, Ticket, AlertCircle } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Tag, ChevronRight, Loader, User, Mail, Phone, Info, X, CheckCircle, Ticket, AlertCircle, Download } from 'lucide-react';
 
 interface CartItem {
   templateId: string;
