@@ -36,48 +36,22 @@ export default async function handler(req, res) {
     quantity: 1,
   }));
 
-  // Build professional plain-text message showing product names + codes
-  const voucherLines = vouchers.map((v) => `• ${v.name}
-  - Price: RM ${parseFloat(v.value).toFixed(2)}
-  - Voucher Code: ${v.code}
-  - Link: ${APP_URL}/voucher/${v.code}`).join('\n\n');
+  // Build highly compressed plain-text message to bypass Chip-in's strict character limits
+  const voucherLines = vouchers.map((v) => `• ${v.name} (Code: ${v.code})\n  Link: ${APP_URL}/voucher/${v.code}`).join('\n\n');
 
-  const emailMessage = `${vouchers[0].name} E-Voucher!
+  const emailMessage = `Thank you for choosing GGP!
 
-Dear ${customerName || 'Customer'},
-
-Thank you for choosing us. We are thrilled to have you! 
-Please remember to download your e-vouchers and keep a digital or printed copy safe for your records.
-
-===========================================================
-ORDER SUMMARY
-===========================================================
-
+ORDER SUMMARY:
 ${voucherLines}
 
-*(Note: If you cannot click the links above, please copy the full URL and paste it into your web browser.)*
+HOW TO REDEEM:
+WhatsApp us to secure your slot early:
+- GOPENG GLAMPING: +60132408857 
+- GLAMPING WETLAND: +60133478857 
+- REKREASI AIR: +60132628857 
+- WETLAND ADVENTURE: +60187018557 
 
-===========================================================
-HOW TO REDEEM YOUR VOUCHER
-===========================================================
-To secure your slot, please contact our team via WhatsApp at the respective site locations listed below. Our sales team will be happy to assist you with your booking:
-
-- GOPENG GLAMPING PARK: +6013-240 8857 
-- GLAMPING WETLAND PUTRAJAYA: +6013-347 8857 
-- PUSAT REKREASI AIR PUTRAJAYA: +6013-262 8857 
-- PUTRAJAYA WETLAND ADVENTURE PARK: +6018-701 8557 
-
-===========================================================
-IMPORTANT REMINDER
-===========================================================
-PLEASE REDEEM AND BOOK YOUR SLOT AS EARLY AS POSSIBLE. 
-We highly recommend not waiting until your voucher is near its expiry date to avoid any booking disappointments.
-
-We can't wait to welcome you to our place and provide you with an unforgettable experience!
-
-Best regards,
-
-GGP Group Official E-Voucher Store
+GGP E-Voucher Store
 https://vms.gptt.my/check`;
 
   // Reference field: comma-separated voucher codes — used for cross-referencing
@@ -123,7 +97,7 @@ https://vms.gptt.my/check`;
     const data = await response.json();
 
     if (!response.ok) {
-      console.error('Chip-in API error:', data);
+      console.error('Chip-in API error:', JSON.stringify(data));
       return res.status(response.status).json({
         error: data.message || 'Chip-in API error',
         details: data,
