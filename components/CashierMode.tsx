@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { fetchVouchers, updateVoucher, deleteVoucher, getCurrentUser, fetchSettings } from '../services/voucherService';
+import { subscribeToPendingVouchers, updateVoucher, deleteVoucher, getCurrentUser, fetchSettings } from '../services/voucherService';
 import { Voucher, VoucherStatus, SystemSettings } from '../types';
 import {
   Printer, CreditCard, Smartphone, DollarSign, RefreshCcw, X, Image as ImageIcon,
@@ -31,20 +31,17 @@ export const CashierMode: React.FC = () => {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [clearConfirm, setClearConfirm] = useState(false);
 
-  const refreshQueue = async () => {
-    const all = await fetchVouchers();
-    setPending(
-      all
-        .filter(v => v.status === VoucherStatus.PENDING_PAYMENT)
-        .sort((a, b) => new Date(b.dates.soldAt).getTime() - new Date(a.dates.soldAt).getTime())
-    );
-  };
-
   useEffect(() => {
-    refreshQueue();
     fetchSettings().then(setSettings);
-    const interval = setInterval(refreshQueue, 10000);
-    return () => clearInterval(interval);
+    
+    // Subscribe to pending vouchers efficiently (costs exactly 1 read per new order, eliminating 279K polling drain)
+    const unsubscribe = subscribeToPendingVouchers((newPendingVouchers) => {
+      setPending(
+        newPendingVouchers.sort((a, b) => new Date(b.dates.soldAt).getTime() - new Date(a.dates.soldAt).getTime())
+      );
+    });
+
+    return () => unsubscribe();
   }, []);
 
   // Group pending vouchers by Client Name
@@ -99,14 +96,12 @@ export const CashierMode: React.FC = () => {
     await deleteVoucher(id);
     setDeleteTargetId(null);
     setSelectedIds(prev => { const s = new Set(prev); s.delete(id); return s; });
-    refreshQueue();
   };
 
   const handleClearAllQueue = async () => {
     await Promise.all(pending.map(v => deleteVoucher(v.id)));
     setClearConfirm(false);
     setSelectedIds(new Set());
-    refreshQueue();
   };
 
   // --- Email Helpers ---
@@ -169,45 +164,55 @@ export const CashierMode: React.FC = () => {
     if (!confirmingMethod) return;
     setProcessing(true);
 
-    const receiptNo = `RCPT-${Math.floor(100000 + Math.random() * 900000)}`;
-    const invoiceNo = `INV-${Math.floor(100000 + Math.random() * 900000)}`;
-    const processedBatch: Voucher[] = [];
+    let processedBatch: Voucher[] = [];
 
-    const cashRec = confirmingMethod === 'Cash' ? parseFloat(amountReceived) : undefined;
-    const changeAmt = confirmingMethod === 'Cash' ? balance : undefined;
+    try {
+      const receiptNo = `RCPT-${Math.floor(100000 + Math.random() * 900000)}`;
+      const invoiceNo = `INV-${Math.floor(100000 + Math.random() * 900000)}`;
 
-    // Step 1: Update Firestore — activate vouchers immediately (no Chip-in dependency)
-    for (const voucher of selectedVouchers) {
-      const updated: Voucher = {
-        ...voucher,
-        status: VoucherStatus.ACTIVE,
-        saleChannel: 'POS',
-        financials: {
-          paymentMethod: confirmingMethod,
-          receiptNo,
-          invoiceNo,
-          cashReceived: cashRec,
-          changeAmount: changeAmt,
-        },
-        dates: {
-          ...voucher.dates,
-          paidAt: new Date().toISOString(),
-        },
-        workflow: {
-          ...voucher.workflow,
-          cashierName: currentUser?.fullName || 'Unknown Cashier',
-        },
-      };
-      await updateVoucher(updated);
-      processedBatch.push(updated);
+      // Safely handle optional fields so Firebase never receives 'undefined'
+      const cashFields = confirmingMethod === 'Cash' ? {
+        cashReceived: parseFloat(amountReceived),
+        changeAmount: balance,
+      } : {};
+
+      // Step 1: Update Firestore — activate vouchers immediately (no Chip-in dependency)
+      for (const voucher of selectedVouchers) {
+        const updated: Voucher = {
+          ...voucher,
+          status: VoucherStatus.ACTIVE,
+          saleChannel: 'POS',
+          financials: {
+            ...voucher.financials, // keep any existing financials
+            paymentMethod: confirmingMethod,
+            receiptNo,
+            invoiceNo,
+            ...cashFields, // safely injects cash fields only if Cash
+          },
+          dates: {
+            ...voucher.dates,
+            paidAt: new Date().toISOString(),
+          },
+          workflow: {
+            ...voucher.workflow,
+            cashierName: currentUser?.fullName || 'Unknown Cashier',
+          },
+        };
+        await updateVoucher(updated);
+        processedBatch.push(updated);
+      }
+
+      setReceiptData(processedBatch);
+      setConfirmingMethod(null);
+      setShowReceipt(true);
+      setSelectedIds(new Set());
+      
+    } catch (err: any) {
+      console.error("Payment Processing Error:", err);
+      alert(`Payment Processing Failed: ${err.message || 'Unknown database error'}. Check your network connection.`);
+    } finally {
+      setProcessing(false);
     }
-
-    setReceiptData(processedBatch);
-    setProcessing(false);
-    setConfirmingMethod(null);
-    setShowReceipt(true);
-    setSelectedIds(new Set());
-    refreshQueue();
 
     // Step 2: Send branded email receipt (non-blocking)
     const email = processedBatch[0]?.email;
@@ -248,9 +253,6 @@ export const CashierMode: React.FC = () => {
                 <Trash2 size={16} />
               </button>
             )}
-            <button onClick={refreshQueue} className="p-2 hover:bg-gray-200 rounded-full">
-              <RefreshCcw size={18} />
-            </button>
           </div>
         </div>
 

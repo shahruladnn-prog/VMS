@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, collection, getDocs, doc, setDoc, deleteDoc, 
-  query, where, updateDoc, addDoc 
+  query, where, updateDoc, addDoc, onSnapshot
 } from 'firebase/firestore';
 import { Voucher, VoucherStatus, VoucherTemplate, User, UserRole, SystemSettings, PromoCode, AuditLogEntry } from '../types';
 
@@ -277,6 +277,20 @@ export const fetchVouchers = async (): Promise<Voucher[]> => {
     const vouchers: Voucher[] = [];
     snapshot.forEach((doc) => vouchers.push(doc.data() as Voucher));
     return vouchers;
+};
+
+// Extremely optimized listener for POS Dashboard to prevent destroying the daily Free Quota (50,000 reads)
+// The previous standard fetchVouchers hook with a 10s interval consumed 279,000+ reads rapidly.
+export const subscribeToPendingVouchers = (callback: (vouchers: Voucher[]) => void) => {
+    const q = query(
+        collection(db, VOUCHERS_COL),
+        where('status', '==', VoucherStatus.PENDING_PAYMENT)
+    );
+    return onSnapshot(q, (snapshot) => {
+        const vouchers: Voucher[] = [];
+        snapshot.forEach((doc) => vouchers.push(doc.data() as Voucher));
+        callback(vouchers);
+    });
 };
 
 export const createVoucher = async (voucher: Voucher): Promise<void> => {
