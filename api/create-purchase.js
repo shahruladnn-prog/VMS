@@ -54,7 +54,7 @@ Visit vms.gptt.my/check and enter your voucher code to view your voucher`;
 
   const body = {
     brand_id: CHIPIN_BRAND_ID,
-    send_receipt: true,         // Send Chip-in's receipt with our custom message
+    send_receipt: false,        // Reverted: Using our own webhooks/mail.php instead of Chip-in limited emails
     reference,                  // Voucher codes for traceability
     client: {
       email: customerEmail,
