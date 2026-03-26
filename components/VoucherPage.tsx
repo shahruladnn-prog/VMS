@@ -94,16 +94,24 @@ export const VoucherPage: React.FC = () => {
 
   return (
     <>
-      {/* Print-only CSS */}
+      {/* Print-only & Mobile CSS */}
       <style>{`
         @media print {
           body * { visibility: hidden !important; }
           #voucher-print, #voucher-print * { visibility: visible !important; }
-          #voucher-print { position: fixed; top: 0; left: 0; width: 100%; }
+          #voucher-print { position: fixed; top: 0; left: 0; width: 100%; flex-direction: row !important; }
           .no-print { display: none !important; }
         }
         @media screen {
           body { margin: 0; background: #f1f5f9; }
+        }
+        @media screen and (max-width: 768px) {
+          #voucher-print { flex-direction: column !important; }
+          .left-panel { width: 100% !important; min-height: 360px; }
+          .right-panel { width: 100% !important; padding: 24px 16px !important; }
+          .voucher-title { font-size: 22px !important; }
+          .value-box { padding: 12px !important; }
+          .expiry-box { flex-direction: column !important; align-items: flex-start !important; gap: 8px !important; }
         }
       `}</style>
 
@@ -138,7 +146,7 @@ export const VoucherPage: React.FC = () => {
           minHeight: 440,
         }}>
           {/* LEFT PANEL */}
-          <div style={{
+          <div className="left-panel" style={{
             width: 220,
             background: vp?.backgroundImage ? `url(${vp.backgroundImage}) center/cover` : primary,
             flexShrink: 0,
@@ -198,7 +206,7 @@ export const VoucherPage: React.FC = () => {
           </div>
 
           {/* RIGHT PANEL */}
-          <div style={{ flex: 1, padding: '32px 32px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="right-panel" style={{ flex: 1, padding: '32px 32px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
             {/* Status + header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <StatusBadge status={voucher.status} />
@@ -207,7 +215,7 @@ export const VoucherPage: React.FC = () => {
 
             {/* Voucher name */}
             <div>
-              <h1 style={{ fontSize: 26, fontWeight: 800, color: '#111827', margin: '0 0 4px', lineHeight: 1.2 }}>
+              <h1 className="voucher-title" style={{ fontSize: 26, fontWeight: 800, color: '#111827', margin: '0 0 4px', lineHeight: 1.2 }}>
                 {voucher.voucherDetails?.name}
               </h1>
               {voucher.voucherDetails?.category && (
@@ -218,7 +226,7 @@ export const VoucherPage: React.FC = () => {
             </div>
 
             {/* VALUE */}
-            <div style={{ background: '#f0fdf4', border: `2px solid ${primary}`, borderRadius: 12, padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div className="value-box" style={{ background: '#f0fdf4', border: `2px solid ${primary}`, borderRadius: 12, padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
               <Tag size={20} color={primary} />
               <div>
                 <div style={{ fontSize: 11, color: '#6b7280', fontWeight: 500 }}>VOUCHER VALUE</div>
@@ -229,7 +237,7 @@ export const VoucherPage: React.FC = () => {
             </div>
 
             {/* EXPIRY — highlighted prominently */}
-            <div style={{
+            <div className="expiry-box" style={{
               background: isExpired ? '#fee2e2' : isExpiringSoon ? '#fff7ed' : '#fef9c3',
               border: `2px solid ${isExpired ? '#dc2626' : isExpiringSoon ? '#f97316' : '#ca8a04'}`,
               borderRadius: 12,
