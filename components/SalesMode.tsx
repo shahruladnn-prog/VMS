@@ -55,31 +55,37 @@ export const SalesMode: React.FC = () => {
     }
   }, [selectedTemplateId, templates]);
 
-  const addToCart = () => {
-    const template = templates.find(t => t.id === selectedTemplateId);
-    if (!template) return;
-    
-    if (currentPriceOverride < 0) {
-        setFeedback({ type: 'error', msg: 'Price cannot be negative.' });
-        setTimeout(() => setFeedback(null), 3000);
-        return;
-    }
+  // Quick add to cart (Loyverse style)
+  const quickAddToCart = (template: VoucherTemplate) => {
+    setCart(prev => {
+      const existingIdx = prev.findIndex(item => item.templateId === template.id && item.value === template.value);
+      if (existingIdx >= 0) {
+        const newCart = [...prev];
+        newCart[existingIdx].quantity += 1;
+        return newCart;
+      } else {
+        return [...prev, {
+          tempId: crypto.randomUUID(),
+          templateId: template.id,
+          templateName: template.name,
+          category: template.category,
+          value: template.value,
+          quantity: 1,
+          image: template.image,
+          terms: template.terms,
+          defaultExpiryDate: template.defaultExpiryDate
+        }];
+      }
+    });
+  };
 
-    const newItem: CartItem = {
-      tempId: crypto.randomUUID(),
-      templateId: template.id,
-      templateName: template.name,
-      category: template.category,
-      value: Number(currentPriceOverride),
-      quantity: Number(currentQuantity),
-      image: template.image,
-      terms: template.terms,
-      defaultExpiryDate: template.defaultExpiryDate
-    };
-
-    setCart([...cart, newItem]);
-    // Reset quantity but keep template selected
-    setCurrentQuantity(1);
+  const updateCartQuantity = (tempId: string, diff: number) => {
+    setCart(prev => prev.map(item => {
+      if (item.tempId === tempId) {
+        return { ...item, quantity: Math.max(1, item.quantity + diff) };
+      }
+      return item;
+    }));
   };
 
   const removeFromCart = (tempId: string) => {
@@ -218,63 +224,34 @@ export const SalesMode: React.FC = () => {
                 </div>
             </div>
 
-            {/* 2. Add Item to Cart */}
+            {/* 2. Add Item to Cart (Loyverse Grid) */}
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-                <h3 className="text-xl font-extrabold text-gray-800 mb-6 flex items-center gap-2"><Package className="text-primary-500"/> SELECT PRODUCT</h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    <div className="md:col-span-2">
-                        <label className={labelClass}>Voucher Package</label>
-                        <select 
-                            className={inputClass}
-                            value={selectedTemplateId}
-                            onChange={(e) => setSelectedTemplateId(e.target.value)}
-                        >
-                            {templates.map(t => (
-                                <option key={t.id} value={t.id}>{t.name} (Def: ${t.value})</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div>
-                        <label className={labelClass}>Price Override ($)</label>
-                        <input 
-                            type="number"
-                            min="0"
-                            className={inputClass}
-                            value={currentPriceOverride}
-                            onChange={(e) => setCurrentPriceOverride(Number(e.target.value))}
-                        />
-                    </div>
-
-                    <div>
-                        <label className={labelClass}>Quantity</label>
-                        <div className="flex items-center h-[54px]">
-                            <button 
-                                onClick={() => setCurrentQuantity(Math.max(1, currentQuantity - 1))}
-                                className="h-full px-5 bg-gray-100 hover:bg-gray-200 rounded-l-lg border-y-2 border-l-2 border-gray-300 text-gray-700 transition-colors"
-                            >
-                                <Minus size={20} />
-                            </button>
-                            <div className="h-full flex-1 flex items-center justify-center border-y-2 border-gray-300 bg-white font-bold text-xl text-gray-900">
-                                {currentQuantity}
-                            </div>
-                            <button 
-                                onClick={() => setCurrentQuantity(currentQuantity + 1)}
-                                className="h-full px-5 bg-gray-100 hover:bg-gray-200 rounded-r-lg border-y-2 border-r-2 border-gray-300 text-gray-700 transition-colors"
-                            >
-                                <Plus size={20} />
-                            </button>
-                        </div>
-                    </div>
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-xl font-extrabold text-gray-800 flex items-center gap-2"><Package className="text-primary-500"/> AVAILABLE VOUCHERS</h3>
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest bg-gray-100 px-3 py-1 rounded-full">Tap to Add</span>
                 </div>
-
-                <button 
-                    onClick={addToCart}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold py-4 rounded-xl text-lg flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-[0.98]"
-                >
-                    <PlusCircle size={24} /> ADD TO ORDER
-                </button>
+                
+                <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {templates.map(t => (
+                        <div key={t.id} onClick={() => quickAddToCart(t)} 
+                            className="bg-gray-50 border-2 border-transparent hover:border-primary-500 rounded-xl overflow-hidden cursor-pointer shadow-sm hover:shadow-md transition-all active:scale-95 group flex flex-col h-full">
+                           {t.image ? (
+                               <img src={t.image} alt={t.name} className="w-full h-24 object-cover border-b border-gray-100" />
+                           ) : (
+                               <div className="w-full h-24 bg-gradient-to-br from-primary-700 to-primary-500 flex flex-col items-center justify-center text-white/40 border-b border-white/10">
+                                   <Package size={28}/>
+                               </div>
+                           )}
+                           <div className="p-3 flex-1 flex flex-col">
+                               <h4 className="font-extrabold text-gray-900 text-xs leading-tight line-clamp-2 mb-1 group-hover:text-primary-700 transition-colors">{t.name}</h4>
+                               <div className="mt-auto text-primary-600 font-extrabold text-sm flex justify-between items-end">
+                                   <span>RM{t.value}</span>
+                                   <PlusCircle size={16} className="text-primary-300 group-hover:text-primary-500 transition-colors"/>
+                               </div>
+                           </div>
+                        </div>
+                    ))}
+                </div>
             </div>
         </div>
 
@@ -302,12 +279,14 @@ export const SalesMode: React.FC = () => {
                             </div>
                             <div className="text-sm text-gray-500 mb-3">Unit Price: ${item.value}</div>
                             
-                            <div className="flex justify-between items-end border-t border-gray-100 pt-3">
-                                <div className="font-mono font-bold text-gray-900 bg-gray-100 px-3 py-1 rounded-lg">
-                                    x{item.quantity}
+                            <div className="flex justify-between items-center border-t border-gray-100 pt-3">
+                                <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
+                                    <button onClick={() => updateCartQuantity(item.tempId, -1)} className="w-7 h-7 flex items-center justify-center bg-white hover:bg-gray-200 rounded-md font-extrabold text-gray-700 shadow-sm transition-colors"><Minus size={14}/></button>
+                                    <span className="font-mono font-bold text-gray-900 w-8 text-center text-sm">{item.quantity}</span>
+                                    <button onClick={() => updateCartQuantity(item.tempId, 1)} className="w-7 h-7 flex items-center justify-center bg-white hover:bg-gray-200 rounded-md font-extrabold text-gray-700 shadow-sm transition-colors"><Plus size={14}/></button>
                                 </div>
                                 <div className="text-xl font-extrabold text-primary-700">
-                                    ${(item.value * item.quantity).toFixed(2)}
+                                    RM{(item.value * item.quantity).toFixed(2)}
                                 </div>
                             </div>
 

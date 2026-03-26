@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { fetchTemplates, generateVoucherCode, createBatchVouchers, validatePromoCode } from '../services/voucherService';
 import { createChipinPurchase } from '../services/chipinService';
 import { VoucherTemplate, Voucher, VoucherStatus, PromoCode } from '../types';
-import { ShoppingCart, Plus, Minus, Tag, ChevronRight, Loader, User, Mail, Phone, Info, X, CheckCircle, Ticket, AlertCircle, Download } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Tag, ChevronRight, Loader, User, Mail, Phone, Info, X, CheckCircle, Ticket, AlertCircle, Download, Eye } from 'lucide-react';
 
 interface CartItem {
   templateId: string;
@@ -366,10 +366,16 @@ export const OnlineStore: React.FC = () => {
             {selectedVoucher.image ? (
               <div className="relative group bg-black/50 rounded-t-2xl">
                 <img src={selectedVoucher.image} alt={selectedVoucher.name} className="w-full max-h-96 object-contain" />
-                <a href={selectedVoucher.image} download={`${selectedVoucher.name.replace(/\s+/g, '_')}_Poster.jpg`} target="_blank" rel="noopener noreferrer" 
-                   className="absolute bottom-4 right-4 bg-black/80 border border-white/20 hover:bg-black text-white px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 backdrop-blur-md transition-all shadow-xl opacity-90 hover:opacity-100 hover:scale-105 active:scale-95">
-                  <Download size={16}/> Download Full Poster
-                </a>
+                <div className="absolute bottom-4 right-4 flex gap-2">
+                  <a href={selectedVoucher.image} target="_blank" rel="noopener noreferrer" 
+                     className="bg-black/80 border border-white/20 hover:bg-black text-white px-3 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 backdrop-blur-md transition-all shadow-xl opacity-90 hover:opacity-100 hover:scale-105 active:scale-95">
+                    <Eye size={16}/> View Full
+                  </a>
+                  <a href={selectedVoucher.image} download={`${selectedVoucher.name.replace(/\s+/g, '_')}_Poster.jpg`} target="_blank" rel="noopener noreferrer" 
+                     className="bg-emerald-600/90 border border-emerald-400/30 hover:bg-emerald-600 text-white px-3 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 backdrop-blur-md transition-all shadow-xl opacity-90 hover:opacity-100 hover:scale-105 active:scale-95">
+                    <Download size={16}/> Download
+                  </a>
+                </div>
               </div>
             ) : (
               <div className="w-full h-48 bg-gradient-to-br from-teal-800 to-teal-600 rounded-t-2xl flex items-center justify-center">
