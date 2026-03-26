@@ -87,7 +87,9 @@ const DEFAULT_SETTINGS: SystemSettings = {
         serviceId: '',
         templateId: '',
         publicKey: '',
-        phpScriptUrl: ''
+        phpScriptUrl: '',
+        senderName: 'GGP VMS',
+        senderEmail: 'booking@gopengglampingpark.com'
     },
     chipin: {
         enabled: false,

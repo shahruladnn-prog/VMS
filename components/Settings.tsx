@@ -71,9 +71,14 @@ $input = json_decode(file_get_contents("php://input"), true);
 if (!isset($input['to']) || !isset($input['subject']) || !isset($input['body'])) {
     http_response_code(400); echo json_encode(["error" => "Missing parameters"]); exit;
 }
+$fromName = isset($input['fromName']) ? $input['fromName'] : "GGP VMS";
+$fromEmail = isset($input['fromEmail']) ? $input['fromEmail'] : "no-reply@" . $_SERVER['SERVER_NAME'];
+
 $headers  = "MIME-Version: 1.0\\r\\n";
 $headers .= "Content-type:text/html;charset=UTF-8\\r\\n";
-$headers .= "From: GGP VMS <no-reply@" . $_SERVER['SERVER_NAME'] . ">\\r\\n";
+$headers .= "From: " . $fromName . " <" . $fromEmail . ">\\r\\n";
+$headers .= "Reply-To: " . $fromEmail . "\\r\\n";
+
 if (mail($input['to'], $input['subject'], $input['body'], $headers)) {
     echo json_encode(["success" => true]);
 } else { http_response_code(500); echo json_encode(["error" => "Mail server failed"]); }
@@ -275,6 +280,19 @@ if (mail($input['to'], $input['subject'], $input['body'], $headers)) {
                           <input className={inputClass} value={settings.email.phpScriptUrl || ''}
                             onChange={e => setSettings({ ...settings, email: { ...settings.email, phpScriptUrl: e.target.value } })}
                             placeholder="https://your-domain.com/mail.php" />
+                        </div>
+                        <div>
+                          <label className={labelClass}>3. Authenticated Sender Email (Crucial for Anti-Spam)</label>
+                          <input className={inputClass} value={settings.email.senderEmail || ''}
+                            onChange={e => setSettings({ ...settings, email: { ...settings.email, senderEmail: e.target.value } })}
+                            placeholder="booking@gopengglampingpark.com" />
+                          <p className="text-[10px] text-gray-500 mt-1 uppercase font-bold">Must be a verified email hosted on the same cPanel server.</p>
+                        </div>
+                        <div>
+                          <label className={labelClass}>4. Sender Name</label>
+                          <input className={inputClass} value={settings.email.senderName || ''}
+                            onChange={e => setSettings({ ...settings, email: { ...settings.email, senderName: e.target.value } })}
+                            placeholder="GGP VMS" />
                         </div>
                       </div>
                     )}

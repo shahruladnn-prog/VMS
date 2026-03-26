@@ -99,6 +99,8 @@ export interface SystemSettings {
     templateId: string;
     publicKey: string;
     phpScriptUrl: string;
+    senderName?: string;
+    senderEmail?: string;
   };
   chipin: {
     enabled: boolean;

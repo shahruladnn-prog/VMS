@@ -92,6 +92,8 @@ async function sendVoucherEmail(settings, vouchers) {
           to: voucher.email,
           subject: `🎫 Your ${voucher.voucherDetails?.name} Voucher — ${biz}`,
           body,
+          fromEmail: settings?.email?.senderEmail || 'booking@gopengglampingpark.com',
+          fromName: settings?.email?.senderName || biz || 'GGP VMS',
         }),
       });
     } catch (e) {

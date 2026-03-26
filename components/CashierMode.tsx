@@ -223,7 +223,13 @@ export const CashierMode: React.FC = () => {
         fetch(settings.email.phpScriptUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to: email, subject, body }),
+          body: JSON.stringify({ 
+            to: email, 
+            subject, 
+            body,
+            fromEmail: settings.email.senderEmail || 'booking@gopengglampingpark.com',
+            fromName: settings.email.senderName || settings.receipt.businessName || 'GGP VMS'
+          }),
         }).then(() => setEmailStatus('Email sent ✅')).catch(() => setEmailStatus('Email failed ⚠️'));
       } else if (settings.email.provider === 'Simulation') {
         simulateSendEmail(email);
