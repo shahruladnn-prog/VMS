@@ -36,17 +36,56 @@ export default async function handler(req, res) {
     quantity: 1,
   }));
 
-  // Build human-readable message showing product names + codes
-  const voucherLines = vouchers.map((v) => `• ${v.name} (Code: ${v.code})`).join('\n');
-  const emailMessage =
-    `Thank you for your purchase! Voucher details:\n${voucherLines}\n\nView and download your e-voucher at: ${APP_URL}/voucher/${vouchers[0].code}`;
+  // Build professional plain-text message showing product names + codes
+  const voucherLines = vouchers.map((v) => `• ${v.name}
+  - Price: RM ${parseFloat(v.value).toFixed(2)}
+  - Voucher Code: ${v.code}
+  - Link: ${APP_URL}/voucher/${v.code}`).join('\n\n');
+
+  const emailMessage = `${vouchers[0].name} E-Voucher! 🏕️
+
+Dear ${customerName || 'Customer'},
+
+Thank you for choosing us. We are thrilled to have you! 
+Please remember to download your e-vouchers and keep a digital or printed copy safe for your records.
+
+===========================================================
+🛒 ORDER SUMMARY
+===========================================================
+
+${voucherLines}
+
+*(Note: If you cannot click the links above, please copy the full URL and paste it into your web browser.)*
+
+===========================================================
+📝 HOW TO REDEEM YOUR VOUCHER
+===========================================================
+To secure your slot, please contact our team via WhatsApp at the respective site locations listed below. Our sales team will be happy to assist you with your booking:
+
+➤ GOPENG GLAMPING PARK: +6013-240 8857 
+➤ GLAMPING WETLAND PUTRAJAYA: +6013-347 8857 
+➤ PUSAT REKREASI AIR PUTRAJAYA: +6013-262 8857 
+➤ PUTRAJAYA WETLAND ADVENTURE PARK: +6018-701 8557 
+
+===========================================================
+⚠️ IMPORTANT REMINDER
+===========================================================
+PLEASE REDEEM AND BOOK YOUR SLOT AS EARLY AS POSSIBLE. 
+We highly recommend not waiting until your voucher is near its expiry date to avoid any booking disappointments.
+
+We can’t wait to welcome you to our place and provide you with an unforgettable experience!
+
+Best regards,
+
+GGP Group Official E-Voucher Store
+https://vms.gptt.my/check`;
 
   // Reference field: comma-separated voucher codes — used for cross-referencing
   const reference = vouchers.map(v => v.code).join(',');
 
   const body = {
     brand_id: CHIPIN_BRAND_ID,
-    send_receipt: false,        // We send our own branded email via webhook
+    send_receipt: true,         // Send Chip-in's receipt with our custom message
     reference,                  // Voucher codes for traceability
     client: {
       email: customerEmail,
