@@ -36,23 +36,18 @@ export default async function handler(req, res) {
     quantity: 1,
   }));
 
-  // Build highly compressed plain-text message to bypass Chip-in's strict character limits
-  const voucherLines = vouchers.map((v) => `• ${v.name} (Code: ${v.code})\n  Link: ${APP_URL}/voucher/${v.code}`).join('\n\n');
+  // Chip-in API strictly limits email_message to 512 characters.
+  const voucherLines = vouchers.map((v) => `${v.name}\n${v.code}`).join('\n\n');
 
-  const emailMessage = `Thank you for choosing GGP!
-
-ORDER SUMMARY:
+  let emailMessage = `Thank you for your purchase of
 ${voucherLines}
 
-HOW TO REDEEM:
-WhatsApp us to secure your slot early:
-- GOPENG GLAMPING: +60132408857 
-- GLAMPING WETLAND: +60133478857 
-- REKREASI AIR: +60132628857 
-- WETLAND ADVENTURE: +60187018557 
+Visit vms.gptt.my/check and enter your voucher code to view your voucher`;
 
-GGP E-Voucher Store
-https://vms.gptt.my/check`;
+  // Prevent API 400 errors for large orders by strictly enforcing the 512 max_length limit
+  if (emailMessage.length > 512) {
+    emailMessage = emailMessage.substring(0, 480) + '\n\n... (More items hidden. Visit vms.gptt.my/check to view all)';
+  }
 
   // Reference field: comma-separated voucher codes — used for cross-referencing
   const reference = vouchers.map(v => v.code).join(',');
