@@ -83,13 +83,16 @@ const DEFAULT_SETTINGS: SystemSettings = {
     },
     email: {
         enabled: true,
-        provider: 'Simulation',
+        provider: 'SMTP',
         serviceId: '',
         templateId: '',
         publicKey: '',
-        phpScriptUrl: '',
+        smtpHost: 'mail.gptt.my',
+        smtpPort: 465,
+        smtpUser: 'hello@gptt.my',
+        smtpPass: '',
         senderName: 'GGP VMS',
-        senderEmail: 'booking@gopengglampingpark.com'
+        senderEmail: 'hello@gptt.my'
     },
     chipin: {
         enabled: false,

@@ -15,6 +15,7 @@
 
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import nodemailer from 'nodemailer';
 
 // Initialize Firebase Admin (singleton pattern prevents re-init on warm starts)
 if (!getApps().length) {
@@ -29,10 +30,11 @@ if (!getApps().length) {
 
 const db = getFirestore();
 
-// Helper: send branded email via PHP script
+// Helper: send branded email natively via NodeMailer SMTP
 async function sendVoucherEmail(settings, vouchers) {
-  const phpUrl = settings?.email?.phpScriptUrl;
-  if (!phpUrl || !settings?.email?.enabled) return;
+  const es = settings?.email;
+  // Make sure SMTP is configured
+  if (!es?.enabled || es?.provider !== 'SMTP' || !es?.smtpHost) return;
 
   const appUrl = settings?.chipin?.appUrl || 'https://vms.gptt.my';
   const biz = settings?.receipt?.businessName || 'Gopeng Glamping Park';
@@ -85,20 +87,23 @@ async function sendVoucherEmail(settings, vouchers) {
     `;
 
     try {
-      await fetch(phpUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to: voucher.email,
-          subject: `🎫 Your ${voucher.voucherDetails?.name} Voucher — ${biz}`,
-          body,
-          fromEmail: settings?.email?.senderEmail || 'booking@gopengglampingpark.com',
-          fromName: settings?.email?.senderName || biz || 'GGP VMS',
-        }),
+      const transporter = nodemailer.createTransport({
+        host: es.smtpHost,
+        port: Number(es.smtpPort),
+        secure: Number(es.smtpPort) === 465,
+        auth: { user: es.smtpUser, pass: es.smtpPass },
+        tls: { rejectUnauthorized: false }
       });
+
+      await transporter.sendMail({
+        from: `"${es.senderName || biz}" <${es.senderEmail || es.smtpUser}>`,
+        to: voucher.email,
+        subject: `🎫 Your ${voucher.voucherDetails?.name} Voucher — ${biz}`,
+        html: body
+      });
+      console.log(`Webhook: Sent Native SMTP email to ${voucher.email}`);
     } catch (e) {
-      console.warn(`Webhook: failed to send email to ${voucher.email}:`, e.message);
-      // Non-blocking — voucher is already activated
+      console.warn(`Webhook: failed to send SMTP email to ${voucher.email}:`, e.message);
     }
   }
 }

@@ -219,18 +219,30 @@ export const CashierMode: React.FC = () => {
     if (sendEmailReceipt && email && settings?.email.enabled) {
       const body = generateEmailBody(processedBatch);
       const subject = `🎫 Your ${settings?.receipt?.businessName || 'Gopeng Glamping Park'} E-Voucher`;
-      if (settings.email.provider === 'CustomPHP' && settings.email.phpScriptUrl) {
-        fetch(settings.email.phpScriptUrl, {
+      
+      if (settings.email.provider === 'SMTP' && settings.email.smtpHost) {
+        // Use the native Vercel NodeMailer proxy
+        fetch('/api/send-email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             to: email, 
             subject, 
-            body,
-            fromEmail: settings.email.senderEmail || 'booking@gopengglampingpark.com',
-            fromName: settings.email.senderName || settings.receipt.businessName || 'GGP VMS'
+            html: body,
+            smtpHost: settings.email.smtpHost,
+            smtpPort: settings.email.smtpPort,
+            smtpUser: settings.email.smtpUser,
+            smtpPass: settings.email.smtpPass,
+            senderEmail: settings.email.senderEmail || settings.email.smtpUser,
+            senderName: settings.email.senderName || settings.receipt.businessName || 'GGP VMS'
           }),
-        }).then(() => setEmailStatus('Email sent ✅')).catch(() => setEmailStatus('Email failed ⚠️'));
+        }).then(res => res.json()).then(data => {
+          if (data.success) setEmailStatus('Email sent ✅');
+          else throw new Error(data.error);
+        }).catch((err) => {
+          console.error("SMTP Error:", err);
+          setEmailStatus('Email failed ⚠️');
+        });
       } else if (settings.email.provider === 'Simulation') {
         simulateSendEmail(email);
       }

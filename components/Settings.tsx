@@ -260,37 +260,49 @@ if (mail($input['to'], $input['subject'], $input['body'], $headers, "-f" . $from
                       <select className={inputClass} value={settings.email.provider}
                         onChange={e => setSettings({ ...settings, email: { ...settings.email, provider: e.target.value as any } })}>
                         <option value="Simulation">Simulation Mode (Demo)</option>
-                        <option value="CustomPHP">Custom Server (PHP) - Free / Direct</option>
+                        <option value="SMTP">Native SMTP (Free/cPanel)</option>
                         <option value="EmailJS">EmailJS (Paid Service)</option>
                       </select>
                     </div>
-                    {settings.email.provider === 'CustomPHP' && (
+                    {settings.email.provider === 'SMTP' && (
                       <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-4">
                         <div className="flex items-start gap-3">
                           <Code className="text-primary-600 shrink-0 mt-1" />
                           <div>
-                            <h4 className="font-bold text-gray-800">1. Download Server Script</h4>
-                            <p className="text-xs text-gray-500 mb-2">Upload 'mail.php' to your website's public folder.</p>
-                            <button onClick={downloadPHPScript} className="bg-gray-800 text-white text-xs font-bold px-3 py-2 rounded flex items-center gap-2 hover:bg-black transition-colors">
-                              <Download size={14} /> Download mail.php
-                            </button>
+                            <h4 className="font-bold text-gray-800">Native Serverless SMTP</h4>
+                            <p className="text-xs text-gray-500 mb-2">Connect directly to your cPanel or private email server. Ensures 100% genuine inbox delivery bypassing tricky shared hosting rules.</p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className={labelClass}>SMTP Host</label>
+                            <input className={inputClass} value={settings.email.smtpHost || ''}
+                              onChange={e => setSettings({ ...settings, email: { ...settings.email, smtpHost: e.target.value } })}
+                              placeholder="mail.gptt.my" />
+                          </div>
+                          <div>
+                            <label className={labelClass}>SMTP Port (465=SSL)</label>
+                            <input className={inputClass} type="number" value={settings.email.smtpPort || ''}
+                              onChange={e => setSettings({ ...settings, email: { ...settings.email, smtpPort: Number(e.target.value) } })}
+                              placeholder="465" />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className={labelClass}>SMTP Username / Email</label>
+                            <input className={inputClass} value={settings.email.smtpUser || ''}
+                              onChange={e => setSettings({ ...settings, email: { ...settings.email, smtpUser: e.target.value } })}
+                              placeholder="hello@gptt.my" />
+                          </div>
+                          <div>
+                            <label className={labelClass}>SMTP Password</label>
+                            <input className={inputClass} type="password" value={settings.email.smtpPass || ''}
+                              onChange={e => setSettings({ ...settings, email: { ...settings.email, smtpPass: e.target.value } })}
+                              placeholder="••••••••" />
                           </div>
                         </div>
                         <div>
-                          <label className={labelClass}>2. PHP Script URL</label>
-                          <input className={inputClass} value={settings.email.phpScriptUrl || ''}
-                            onChange={e => setSettings({ ...settings, email: { ...settings.email, phpScriptUrl: e.target.value } })}
-                            placeholder="https://your-domain.com/mail.php" />
-                        </div>
-                        <div>
-                          <label className={labelClass}>3. Authenticated Sender Email (Crucial for Anti-Spam)</label>
-                          <input className={inputClass} value={settings.email.senderEmail || ''}
-                            onChange={e => setSettings({ ...settings, email: { ...settings.email, senderEmail: e.target.value } })}
-                            placeholder="booking@gopengglampingpark.com" />
-                          <p className="text-[10px] text-gray-500 mt-1 uppercase font-bold">Must be a verified email hosted on the same cPanel server.</p>
-                        </div>
-                        <div>
-                          <label className={labelClass}>4. Sender Name</label>
+                          <label className={labelClass}>Sender Display Name</label>
                           <input className={inputClass} value={settings.email.senderName || ''}
                             onChange={e => setSettings({ ...settings, email: { ...settings.email, senderName: e.target.value } })}
                             placeholder="GGP VMS" />

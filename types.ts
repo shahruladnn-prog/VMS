@@ -94,11 +94,14 @@ export interface SystemSettings {
   };
   email: {
     enabled: boolean;
-    provider: 'EmailJS' | 'Simulation' | 'CustomPHP';
+    provider: 'EmailJS' | 'Simulation' | 'SMTP';
     serviceId: string;
     templateId: string;
     publicKey: string;
-    phpScriptUrl: string;
+    smtpHost?: string;
+    smtpPort?: number;
+    smtpUser?: string;
+    smtpPass?: string;
     senderName?: string;
     senderEmail?: string;
   };
