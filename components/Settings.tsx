@@ -79,7 +79,8 @@ $headers .= "Content-type:text/html;charset=UTF-8\\r\\n";
 $headers .= "From: " . $fromName . " <" . $fromEmail . ">\\r\\n";
 $headers .= "Reply-To: " . $fromEmail . "\\r\\n";
 
-if (mail($input['to'], $input['subject'], $input['body'], $headers)) {
+// The 5th parameter (-f) sets the Envelope-From to bypass "on behalf of" spoofing flags.
+if (mail($input['to'], $input['subject'], $input['body'], $headers, "-f" . $fromEmail)) {
     echo json_encode(["success" => true]);
 } else { http_response_code(500); echo json_encode(["error" => "Mail server failed"]); }
 ?>`;
