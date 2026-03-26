@@ -585,7 +585,7 @@ export const CashierMode: React.FC = () => {
                 <div key={v.id} className="mb-6 flex flex-col items-center">
                   <p className="text-xs font-bold mb-1">{i + 1}. {v.voucherDetails.name}</p>
                   <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${v.voucherCode}`}
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent((settings?.chipin?.appUrl || 'https://vms.gptt.my') + '/voucher/' + v.voucherCode)}`}
                     alt="Voucher QR"
                     className="w-24 h-24 mb-1"
                   />
