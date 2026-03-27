@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { fetchTemplates, generateVoucherCode, createBatchVouchers, validatePromoCode } from '../services/voucherService';
 import { createChipinPurchase } from '../services/chipinService';
 import { VoucherTemplate, Voucher, VoucherStatus, PromoCode } from '../types';
-import { ShoppingCart, Plus, Minus, Tag, ChevronRight, Loader, User, Mail, Phone, Info, X, CheckCircle, Ticket, AlertCircle, Download, Eye } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Tag, ChevronRight, ChevronLeft, Loader, User, Mail, Phone, Info, X, CheckCircle, Ticket, AlertCircle, Download, Eye } from 'lucide-react';
 
 interface CartItem {
   templateId: string;
@@ -33,6 +33,9 @@ export const OnlineStore: React.FC = () => {
   // Terms & conditions popup
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [termsAgreed, setTermsAgreed] = useState(false);
+
+  // Fullscreen Lightbox
+  const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
 
   // Promo code
   const [promoInput, setPromoInput] = useState('');
@@ -408,13 +411,34 @@ export const OnlineStore: React.FC = () => {
                   : (selectedVoucher.image ? [selectedVoucher.image] : []);
                 
                 return imagesToDisplay.length > 0 ? (
-                  <div className="relative group bg-black/50 rounded-t-2xl overflow-hidden">
-                    <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide" style={{ scrollBehavior: 'smooth' }}>
+                  <div className="relative group bg-black/50 rounded-t-2xl overflow-hidden group/carousel">
+                    
+                    {/* Desktop Navigation Arrows */}
+                    {imagesToDisplay.length > 1 && (
+                        <>
+                            <button onClick={(e) => {
+                                e.stopPropagation();
+                                const container = document.getElementById('voucher-carousel');
+                                if (container) container.scrollBy({ left: -container.offsetWidth, behavior: 'smooth' });
+                            }} className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/80 text-white rounded-full p-2 backdrop-blur-sm z-10 opacity-0 group-hover/carousel:opacity-100 transition-all shadow-lg hidden md:flex">
+                                <ChevronLeft size={24} />
+                            </button>
+                            <button onClick={(e) => {
+                                e.stopPropagation();
+                                const container = document.getElementById('voucher-carousel');
+                                if (container) container.scrollBy({ left: container.offsetWidth, behavior: 'smooth' });
+                            }} className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/80 text-white rounded-full p-2 backdrop-blur-sm z-10 opacity-0 group-hover/carousel:opacity-100 transition-all shadow-lg hidden md:flex">
+                                <ChevronRight size={24} />
+                            </button>
+                        </>
+                    )}
+
+                    <div id="voucher-carousel" className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide relative" style={{ scrollBehavior: 'smooth' }}>
                         {imagesToDisplay.map((img, idx) => (
                             <div key={idx} className="w-full shrink-0 snap-center relative">
-                                <img src={img} alt={`${selectedVoucher.name} - ${idx+1}`} className="w-full max-h-[60vh] object-contain" />
+                                <img src={img} alt={`${selectedVoucher.name} - ${idx+1}`} className="w-full max-h-[60vh] object-contain cursor-pointer" onClick={() => setFullScreenImage(img)} />
                                 <div className="absolute bottom-6 right-4 flex gap-2">
-                                  <button onClick={(e) => { e.stopPropagation(); handleSafeMediaAction(img, 'view', `${selectedVoucher.name}_${idx}.jpg`) }}
+                                  <button onClick={(e) => { e.stopPropagation(); setFullScreenImage(img); }}
                                      className="bg-black/80 border border-white/20 hover:bg-black text-white px-3 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 backdrop-blur-md transition-all shadow-xl opacity-90 hover:opacity-100 active:scale-95">
                                     <Eye size={16}/> View Full
                                   </button>
@@ -557,6 +581,27 @@ export const OnlineStore: React.FC = () => {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ===== FULLSCREEN LIGHTBOX ===== */}
+      {fullScreenImage && (
+        <div 
+          className="fixed inset-0 bg-black/95 z-[70] flex items-center justify-center p-4 backdrop-blur-lg animate-in fade-in duration-200"
+          onClick={() => setFullScreenImage(null)}
+        >
+          <button 
+            className="absolute top-6 right-6 bg-white/10 hover:bg-white/20 text-white rounded-full p-2 backdrop-blur-md transition-all z-50"
+            onClick={(e) => { e.stopPropagation(); setFullScreenImage(null); }}
+          >
+            <X size={28} />
+          </button>
+          <img 
+            src={fullScreenImage} 
+            alt="Fullscreen View" 
+            className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl animate-in zoom-in duration-300" 
+            onClick={(e) => e.stopPropagation()} 
+          />
         </div>
       )}
     </div>
