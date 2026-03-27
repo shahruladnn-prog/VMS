@@ -30,6 +30,8 @@ export interface VoucherTemplate {
   terms: string;
   highlights?: string;
   image?: string;
+  images?: string[];
+  videoUrl?: string;
 }
 
 export interface Voucher {
@@ -44,6 +46,8 @@ export interface Voucher {
     category: string;
     terms: string;
     image?: string;
+    images?: string[];
+    videoUrl?: string;
   };
   eventSource: string;
   status: VoucherStatus;

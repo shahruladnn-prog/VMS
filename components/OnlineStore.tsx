@@ -40,6 +40,44 @@ export const OnlineStore: React.FC = () => {
   const [promoStatus, setPromoStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
   const [promoMessage, setPromoMessage] = useState('');
 
+  // Mobile Safe Download/View Helper
+  const handleSafeMediaAction = async (base64Data: string, action: 'view' | 'download', filename: string) => {
+    try {
+      const response = await fetch(base64Data);
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      if (action === 'download') {
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename;
+        a.click();
+      } else {
+        window.open(blobUrl, '_blank');
+      }
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000); // Cleanup memory
+    } catch (e) {
+      console.error('Blob conversion failed', e);
+      if (action === 'download') {
+         const a = document.createElement('a'); a.href = base64Data; a.download = filename; a.click();
+      } else { window.open(base64Data, '_blank'); }
+    }
+  };
+
+  const getYouTubeEmbedUrl = (url?: string) => {
+    if (!url) return null;
+    try {
+        const urlObj = new URL(url);
+        let videoId = '';
+        if (urlObj.hostname.includes('youtube.com')) {
+            videoId = urlObj.searchParams.get('v') || urlObj.pathname.split('/')[2];
+        } else if (urlObj.hostname.includes('youtu.be')) {
+            videoId = urlObj.pathname.slice(1);
+        }
+        if (videoId) return `https://www.youtube-nocookie.com/embed/${videoId}?rel=0`;
+    } catch { }
+    return null;
+  };
+
   useEffect(() => {
     fetchTemplates(true).then(all => {
       setTemplates(all);
@@ -361,27 +399,48 @@ export const OnlineStore: React.FC = () => {
       {/* ===== VOUCHER DETAIL MODAL ===== */}
       {selectedVoucher && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setSelectedVoucher(null)}>
-          <div className="bg-gray-900 border border-teal-800/60 shadow-[0_0_50px_rgba(13,148,136,0.15)] rounded-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto animate-in zoom-in duration-200"
+          <div className="bg-gray-900 border border-teal-800/60 shadow-[0_0_50px_rgba(13,148,136,0.15)] rounded-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto animate-in zoom-in duration-200 scrollbar-hide"
             onClick={e => e.stopPropagation()}>
-            {selectedVoucher.image ? (
-              <div className="relative group bg-black/50 rounded-t-2xl">
-                <img src={selectedVoucher.image} alt={selectedVoucher.name} className="w-full max-h-96 object-contain" />
-                <div className="absolute bottom-4 right-4 flex gap-2">
-                  <a href={selectedVoucher.image} target="_blank" rel="noopener noreferrer" 
-                     className="bg-black/80 border border-white/20 hover:bg-black text-white px-3 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 backdrop-blur-md transition-all shadow-xl opacity-90 hover:opacity-100 hover:scale-105 active:scale-95">
-                    <Eye size={16}/> View Full
-                  </a>
-                  <a href={selectedVoucher.image} download={`${selectedVoucher.name.replace(/\s+/g, '_')}_Poster.jpg`} target="_blank" rel="noopener noreferrer" 
-                     className="bg-emerald-600/90 border border-emerald-400/30 hover:bg-emerald-600 text-white px-3 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 backdrop-blur-md transition-all shadow-xl opacity-90 hover:opacity-100 hover:scale-105 active:scale-95">
-                    <Download size={16}/> Download
-                  </a>
-                </div>
-              </div>
-            ) : (
-              <div className="w-full h-48 bg-gradient-to-br from-teal-800 to-teal-600 rounded-t-2xl flex items-center justify-center">
-                <Tag size={64} className="text-white/20" />
-              </div>
-            )}
+            
+            {(() => {
+                const imagesToDisplay = selectedVoucher.images && selectedVoucher.images.length > 0 
+                  ? selectedVoucher.images 
+                  : (selectedVoucher.image ? [selectedVoucher.image] : []);
+                
+                return imagesToDisplay.length > 0 ? (
+                  <div className="relative group bg-black/50 rounded-t-2xl overflow-hidden">
+                    <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide" style={{ scrollBehavior: 'smooth' }}>
+                        {imagesToDisplay.map((img, idx) => (
+                            <div key={idx} className="w-full shrink-0 snap-center relative">
+                                <img src={img} alt={`${selectedVoucher.name} - ${idx+1}`} className="w-full max-h-[60vh] object-contain" />
+                                <div className="absolute bottom-6 right-4 flex gap-2">
+                                  <button onClick={(e) => { e.stopPropagation(); handleSafeMediaAction(img, 'view', `${selectedVoucher.name}_${idx}.jpg`) }}
+                                     className="bg-black/80 border border-white/20 hover:bg-black text-white px-3 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 backdrop-blur-md transition-all shadow-xl opacity-90 hover:opacity-100 active:scale-95">
+                                    <Eye size={16}/> View Full
+                                  </button>
+                                  <button onClick={(e) => { e.stopPropagation(); handleSafeMediaAction(img, 'download', `${selectedVoucher.name}_${idx}.jpg`) }}
+                                     className="bg-emerald-600/90 border border-emerald-400/30 hover:bg-emerald-600 text-white px-3 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 backdrop-blur-md transition-all shadow-xl opacity-90 hover:opacity-100 active:scale-95">
+                                    <Download size={16}/> Download
+                                  </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    {imagesToDisplay.length > 1 && (
+                        <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-2 pointer-events-none">
+                            {imagesToDisplay.map((_, idx) => (
+                                <div key={idx} className="w-2 h-2 rounded-full bg-white/70 shadow-[0_1px_3px_rgba(0,0,0,0.8)]"></div>
+                            ))}
+                        </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="w-full h-48 bg-gradient-to-br from-teal-800 to-teal-600 rounded-t-2xl flex items-center justify-center">
+                    <Tag size={64} className="text-white/20" />
+                  </div>
+                );
+            })()}
+
             <div className="p-6 md:p-8">
               <div className="flex justify-between items-start mb-1">
                 <div>
@@ -408,6 +467,19 @@ export const OnlineStore: React.FC = () => {
                       </li>
                     ))}
                   </ul>
+                </div>
+              )}
+
+              {getYouTubeEmbedUrl(selectedVoucher.videoUrl) && (
+                <div className="mb-5 rounded-xl overflow-hidden shadow-lg shadow-black/40 border border-teal-800/50 bg-black aspect-video relative">
+                    <iframe 
+                        className="absolute inset-0 w-full h-full"
+                        src={getYouTubeEmbedUrl(selectedVoucher.videoUrl)!}
+                        title="Explainer Video"
+                        frameBorder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                    ></iframe>
                 </div>
               )}
 

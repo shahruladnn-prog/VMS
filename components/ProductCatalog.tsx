@@ -1,7 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { fetchTemplates, saveTemplate, deleteTemplate, fetchCategories, addCategory, removeCategory } from '../services/voucherService';
 import { VoucherTemplate } from '../types';
-import { Plus, Edit, Trash, Package, Calendar, Settings, Image as ImageIcon, FileText, Eye, EyeOff } from 'lucide-react';
+import { Plus, Edit, Trash, Package, Calendar, Settings, Image as ImageIcon, FileText, Eye, EyeOff, X } from 'lucide-react';
+
+const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                const MAX_WIDTH = 800; // Cap width to 800px to ensure tiny Base64 size
+                if (width > MAX_WIDTH) { height = (MAX_WIDTH / width) * height; width = MAX_WIDTH; }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx?.drawImage(img, 0, 0, width, height);
+                // Return highly optimized WebP @ 80% quality (Approx 50-100kb)
+                resolve(canvas.toDataURL('image/webp', 0.8));
+            };
+            img.src = e.target?.result as string;
+        };
+        reader.readAsDataURL(file);
+    });
+};
 
 export const ProductCatalog: React.FC = () => {
   const [templates, setTemplates] = useState<VoucherTemplate[]>([]);
@@ -33,7 +57,9 @@ export const ProductCatalog: React.FC = () => {
         defaultExpiryDate: editing.defaultExpiryDate || undefined,
         terms: editing.terms || '',
         highlights: editing.highlights || '',
-        image: editing.image
+        image: editing.image,
+        images: editing.images || [],
+        videoUrl: editing.videoUrl || ''
       };
       await saveTemplate(template);
       setEditing(null);
@@ -63,19 +89,39 @@ export const ProductCatalog: React.FC = () => {
       }
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && editing) {
-        if (file.size > 500000) { // 500kb limit check
-            alert("Image is too large. Please use an image under 500KB.");
-            return;
+        if (!file.type.startsWith('image/')) { alert('Please upload a valid image file'); return; }
+        const compressedBase64 = await compressImage(file);
+        
+        // Push onto existing images array (or start a new one)
+        const currentImages = editing.images || [];
+        if (currentImages.length >= 8) {
+             alert('Maximum 8 images allowed per product.');
+             return;
         }
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            setEditing({ ...editing, image: reader.result as string });
-        };
-        reader.readAsDataURL(file);
+
+        const newImages = [...currentImages, compressedBase64];
+        
+        // For backwards compatibility on storefront legacy layout, automatically treat first image as the main `image`
+        setEditing({ 
+            ...editing, 
+            images: newImages,
+            image: newImages[0] 
+        });
     }
+  };
+
+  const removeImage = (index: number) => {
+      if (!editing || !editing.images) return;
+      const newImages = [...editing.images];
+      newImages.splice(index, 1);
+      setEditing({
+          ...editing,
+          images: newImages,
+          image: newImages.length > 0 ? newImages[0] : undefined
+      });
   };
 
   const displayedTemplates = showInactive ? templates : templates.filter(t => t.isActive);
@@ -239,29 +285,47 @@ export const ProductCatalog: React.FC = () => {
                             placeholder="Enter terms and conditions here..."
                         />
                     </div>
+                    
+                    <div>
+                        <label className={labelClass}>Promo Video URL <span className="text-gray-400 normal-case">(YouTube / Vimeo link)</span></label>
+                        <input 
+                            className={inputClass} 
+                            value={editing.videoUrl || ''} 
+                            onChange={e => setEditing({...editing, videoUrl: e.target.value})} 
+                            placeholder="e.g. https://www.youtube.com/watch?v=..." 
+                        />
+                    </div>
 
                     <div>
-                        <label className={labelClass}>Poster Image (Max 500KB)</label>
-                        <div className="flex gap-4 items-center bg-gray-50 p-3 rounded-lg border border-gray-200">
-                            {editing.image ? (
-                                <img src={editing.image} alt="Preview" className="h-16 w-16 object-cover rounded border border-gray-300" />
-                            ) : (
-                                <div className="h-16 w-16 bg-gray-200 rounded flex items-center justify-center text-gray-400">
-                                    <ImageIcon size={24} />
-                                </div>
-                            )}
-                            <div className="flex-1">
-                                <label className="cursor-pointer bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-bold py-2 px-4 rounded-lg inline-block transition-colors text-sm">
-                                    Choose File
-                                    <input 
-                                        type="file" 
-                                        accept="image/*"
-                                        onChange={handleImageUpload}
-                                        className="hidden"
-                                    />
-                                </label>
-                                <span className="ml-3 text-xs text-gray-500 font-medium">{editing.image ? 'Image Selected' : 'No file chosen'}</span>
+                        <label className={labelClass}>Product Gallery <span className="text-gray-400 normal-case">(Auto-compressing up to 8 WebP images)</span></label>
+                        <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                            
+                            <div className="flex flex-wrap gap-3 mb-4">
+                                {(editing.images || []).map((img, idx) => (
+                                    <div key={idx} className="relative group w-20 h-20 rounded-lg overflow-hidden border border-gray-300 shadow-sm">
+                                        <img src={img} alt="Gallery item" className="w-full h-full object-cover" />
+                                        <button 
+                                            onClick={() => removeImage(idx)}
+                                            className="absolute inset-0 bg-red-600/50 hidden group-hover:flex items-center justify-center text-white transition-all backdrop-blur-sm"
+                                        >
+                                            <Trash size={18} />
+                                        </button>
+                                        {idx === 0 && <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[9px] text-center py-0.5 font-bold">COVER</span>}
+                                    </div>
+                                ))}
+                                
+                                {(editing.images?.length || 0) < 8 && (
+                                    <label className="w-20 h-20 border-2 border-dashed border-gray-300 bg-white hover:bg-gray-100 rounded-lg flex flex-col items-center justify-center cursor-pointer transition-colors text-gray-500 hover:border-primary-400 hover:text-primary-600">
+                                        <Plus size={20} />
+                                        <span className="text-[10px] font-bold mt-1">Add Image</span>
+                                        <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                                    </label>
+                                )}
                             </div>
+                            
+                            {(editing.images?.length || 0) === 0 && (
+                                <p className="text-xs font-medium text-amber-600">No images added. Your product will render as a placeholder block online.</p>
+                            )}
                         </div>
                     </div>
                     
