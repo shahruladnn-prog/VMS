@@ -1,13 +1,24 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { useAppData } from '../context/AppDataContext';
-import { VoucherStatus } from '../types';
+import { fetchVouchers } from '../services/voucherService';
+import { Voucher, VoucherStatus } from '../types';
 import { AlertTriangle } from 'lucide-react';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 
 export const Dashboard: React.FC = () => {
-  const { vouchers, categories, loading } = useAppData();
+  const { categories, loading: appLoading } = useAppData();
+  
+  const [vouchers, setVouchers] = useState<Voucher[]>([]);
+  const [vouchersLoading, setVouchersLoading] = useState(true);
+
+  useEffect(() => {
+      fetchVouchers().then(data => {
+          setVouchers(data);
+          setVouchersLoading(false);
+      });
+  }, []);
 
   // Dashboard Overview Filters
   const [overviewDateRange, setOverviewDateRange] = useState({ start: '', end: '' });
@@ -79,7 +90,7 @@ export const Dashboard: React.FC = () => {
   const dateInputClass = `${inputClass} cursor-pointer`;
   const labelClass = "block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide";
 
-  if (loading) return <div className="p-8 text-center text-gray-600 font-medium">Loading Data...</div>;
+  if (appLoading || vouchersLoading) return <div className="p-8 text-center text-gray-600 font-medium">Loading Data...</div>;
 
   return (
     <div className="p-4 md:p-8 bg-gray-50 min-h-screen">

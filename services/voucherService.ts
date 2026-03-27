@@ -1,7 +1,8 @@
 import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, collection, getDocs, doc, setDoc, deleteDoc, 
-  query, where, updateDoc, addDoc, onSnapshot
+  query, where, updateDoc, addDoc, onSnapshot, orderBy, limit,
+  getCountFromServer, getAggregateFromServer, sum
 } from 'firebase/firestore';
 import { Voucher, VoucherStatus, VoucherTemplate, User, UserRole, SystemSettings, PromoCode, AuditLogEntry } from '../types';
 
@@ -278,11 +279,63 @@ export const removeSalesPerson = async (name: string): Promise<void> => {
 
 // --- VOUCHERS ---
 
-export const fetchVouchers = async (): Promise<Voucher[]> => {
+let cachedVouchers: Voucher[] | null = null;
+let lastFetchTime = 0;
+
+export const fetchVouchers = async (force = false): Promise<Voucher[]> => {
+    if (!force && cachedVouchers && Date.now() - lastFetchTime < 5 * 60 * 1000) {
+        return cachedVouchers;
+    }
     const snapshot = await getDocs(collection(db, VOUCHERS_COL));
     const vouchers: Voucher[] = [];
     snapshot.forEach((doc) => vouchers.push(doc.data() as Voucher));
+    
+    cachedVouchers = vouchers;
+    lastFetchTime = Date.now();
     return vouchers;
+};
+
+// Safe Report Engine List Fetcher - Defaults to 300 to protect data usage while remaining useful
+export const getPagedVouchers = async (limitNum: number = 300): Promise<Voucher[]> => {
+    const q = query(collection(db, VOUCHERS_COL), orderBy('dates.soldAt', 'desc'), limit(limitNum));
+    const snapshot = await getDocs(q);
+    const vouchers: Voucher[] = [];
+    snapshot.forEach((doc) => vouchers.push(doc.data() as Voucher));
+    return vouchers;
+};
+
+// Firebase native Server-Side Aggregation for the Admin Dashboard
+// Bypasses the need to payload thousands of documents to RAM.
+export const getDashboardMetrics = async () => {
+    const baseCol = collection(db, VOUCHERS_COL);
+    
+    // Total Sold Items
+    const totalCountSnap = await getCountFromServer(baseCol);
+    const totalSold = totalCountSnap.data().count;
+
+    // Total Redeemed
+    const redeemedQuery = query(baseCol, where('status', '==', VoucherStatus.REDEEMED));
+    const redeemedCountSnap = await getCountFromServer(redeemedQuery);
+    const redeemedCount = redeemedCountSnap.data().count;
+
+    // Total Revenue (Only Paid/Active/Redeemed items, not pending/expired)
+    // Firestore `in` max is 10 items. We only have 4 enum statuses.
+    const paidQuery = query(baseCol, where('status', 'in', [VoucherStatus.ACTIVE, VoucherStatus.REDEEMED]));
+    const revenueSnap = await getAggregateFromServer(paidQuery, { total: sum('voucherDetails.value') });
+    const totalRevenue = revenueSnap.data().total || 0;
+
+    // Pending Count
+    const pendingQuery = query(baseCol, where('status', '==', VoucherStatus.PENDING_PAYMENT));
+    const pendingCountSnap = await getCountFromServer(pendingQuery);
+    const pendingCount = pendingCountSnap.data().count;
+
+    // Recent Transactions (Limit 15 for Quick Overview & Charts)
+    const recentQuery = query(baseCol, orderBy('dates.soldAt', 'desc'), limit(30));
+    const recentSnap = await getDocs(recentQuery);
+    const recentVouchers: Voucher[] = [];
+    recentSnap.forEach(d => recentVouchers.push(d.data() as Voucher));
+
+    return { totalSold, redeemedCount, totalRevenue, pendingCount, recentVouchers };
 };
 
 // Extremely optimized listener for POS Dashboard to prevent destroying the daily Free Quota (50,000 reads)

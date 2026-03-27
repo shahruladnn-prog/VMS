@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { fetchVouchers } from '../services/voucherService';
+import { fetchVoucherByCode } from '../services/voucherService';
 import { Voucher, VoucherStatus } from '../types';
 import { Search, Loader, CheckCircle, XCircle, Clock, AlertTriangle, Tag, QrCode } from 'lucide-react';
 
@@ -13,8 +13,7 @@ export const VoucherCheck: React.FC = () => {
     setLoading(true);
     setResult(null);
     try {
-      const vouchers = await fetchVouchers();
-      const found = vouchers.find(v => v.voucherCode.toUpperCase() === code.trim().toUpperCase());
+      const found = await fetchVoucherByCode(code);
       setResult(found || 'not_found');
     } catch {
       setResult('not_found');

@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Papa from 'papaparse';
-import { deleteVoucher, updateVoucher, bulkDeleteVouchers, bulkExpireVouchers } from '../services/voucherService';
+import { deleteVoucher, updateVoucher, bulkDeleteVouchers, bulkExpireVouchers, fetchVouchers } from '../services/voucherService';
 import { useAppData } from '../context/AppDataContext';
 import { Voucher, VoucherStatus } from '../types';
 import {
@@ -39,7 +39,21 @@ type ReportTab = 'transactions' | 'by-item' | 'by-employee' | 'by-payment';
 const PAGE_SIZE = 20;
 
 export const Reports: React.FC = () => {
-  const { vouchers, categories, loading, refresh } = useAppData();
+  const { categories, loading: appLoading } = useAppData();
+  
+  const [vouchers, setVouchers] = useState<Voucher[]>([]);
+  const [vouchersLoading, setVouchersLoading] = useState(true);
+
+  const loadVouchers = async (force = false) => {
+      setVouchersLoading(true);
+      const data = await fetchVouchers(force);
+      setVouchers(data);
+      setVouchersLoading(false);
+  };
+
+  useEffect(() => {
+      loadVouchers();
+  }, []);
   const [activeTab, setActiveTab] = useState<ReportTab>('transactions');
 
   // Bulk selection
@@ -153,7 +167,7 @@ export const Reports: React.FC = () => {
   // --- Actions ---
   const handleSoftDelete = async (id: string) => {
     await deleteVoucher(id);
-    await refresh('vouchers');
+    await loadVouchers(true);
     setIsEditModalOpen(false);
   };
 
@@ -162,7 +176,7 @@ export const Reports: React.FC = () => {
       await updateVoucher(editVoucher);
       setEditVoucher(null);
       setIsEditModalOpen(false);
-      await refresh('vouchers');
+      await loadVouchers(true);
     }
   };
 
@@ -185,7 +199,7 @@ export const Reports: React.FC = () => {
     setBulkActionLoading(true);
     await bulkDeleteVouchers(Array.from(selectedIds));
     setSelectedIds(new Set());
-    await refresh('vouchers');
+    await loadVouchers(true);
     setBulkActionLoading(false);
   };
 
@@ -194,7 +208,7 @@ export const Reports: React.FC = () => {
     setBulkActionLoading(true);
     await bulkExpireVouchers(Array.from(selectedIds));
     setSelectedIds(new Set());
-    await refresh('vouchers');
+    await loadVouchers(true);
     setBulkActionLoading(false);
   };
 
@@ -277,7 +291,7 @@ export const Reports: React.FC = () => {
 
   const totalRevenue = paidData.reduce((s, v) => s + v.voucherDetails.value, 0);
 
-  if (loading) return <div className="p-8 text-center text-gray-600 font-medium">Loading Reports...</div>;
+  if (appLoading || vouchersLoading) return <div className="p-8 text-center text-gray-600 font-medium">Loading Reports...</div>;
 
   const tabs: { id: ReportTab; label: string; icon: React.ReactNode }[] = [
     { id: 'transactions', label: 'All Transactions', icon: <FileText size={16} /> },

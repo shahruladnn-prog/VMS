@@ -8,7 +8,6 @@ import { Voucher, VoucherTemplate, User, PromoCode } from '../types';
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 interface AppData {
-  vouchers: Voucher[];
   templates: VoucherTemplate[];
   categories: string[];
   users: User[];
@@ -18,10 +17,9 @@ interface AppData {
   refresh: (key?: DataKey) => Promise<void>;
 }
 
-type DataKey = 'vouchers' | 'templates' | 'categories' | 'users' | 'branches' | 'promoCodes';
+type DataKey = 'templates' | 'categories' | 'users' | 'branches' | 'promoCodes';
 
 const AppDataContext = createContext<AppData>({
-  vouchers: [],
   templates: [],
   categories: [],
   users: [],
@@ -34,7 +32,6 @@ const AppDataContext = createContext<AppData>({
 export const useAppData = () => useContext(AppDataContext);
 
 export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [templates, setTemplates] = useState<VoucherTemplate[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -43,7 +40,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [loading, setLoading] = useState(true);
 
   const lastFetched = useRef<Record<DataKey, number>>({
-    vouchers: 0, templates: 0, categories: 0,
+    templates: 0, categories: 0,
     users: 0, branches: 0, promoCodes: 0
   });
 
@@ -55,7 +52,6 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     lastFetched.current[key] = Date.now();
 
     switch (key) {
-      case 'vouchers': setVouchers(await fetchVouchers()); break;
       case 'templates': setTemplates(await fetchTemplates()); break;
       case 'categories': setCategories(await fetchCategories()); break;
       case 'users': setUsers(await fetchUsers()); break;
@@ -69,7 +65,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
       await fetchKey(key, true);
     } else {
       await Promise.all(
-        (['vouchers', 'templates', 'categories', 'users', 'branches', 'promoCodes'] as DataKey[])
+        (['templates', 'categories', 'users', 'branches', 'promoCodes'] as DataKey[])
           .map(k => fetchKey(k, true))
       );
     }
@@ -80,7 +76,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const init = async () => {
       setLoading(true);
       await Promise.all(
-        (['vouchers', 'templates', 'categories', 'users', 'branches', 'promoCodes'] as DataKey[])
+        (['templates', 'categories', 'users', 'branches', 'promoCodes'] as DataKey[])
           .map(k => fetchKey(k, true))
       );
       setLoading(false);
@@ -90,7 +86,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   return (
     <AppDataContext.Provider value={{
-      vouchers, templates, categories, users, branches, promoCodes, loading, refresh
+      templates, categories, users, branches, promoCodes, loading, refresh
     }}>
       {children}
     </AppDataContext.Provider>

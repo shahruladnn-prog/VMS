@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fetchVouchers, updateVoucher, fetchBranches, addBranch, removeBranch, updateBranch, getCurrentUser } from '../services/voucherService';
+import { fetchVoucherByCode, updateVoucher, fetchBranches, addBranch, removeBranch, updateBranch, getCurrentUser } from '../services/voucherService';
 import { Voucher, VoucherStatus } from '../types';
 import { Search, ScanLine, CheckCircle, XCircle, MapPin, FileText, Image as ImageIcon, Calendar, Settings, Plus, Trash, Edit2, Save, X } from 'lucide-react';
 
@@ -41,8 +41,7 @@ export const RedemptionMode: React.FC = () => {
     setSuccessMsg('');
     setBookingDate(''); // Reset booking date on new search
 
-    const vouchers = await fetchVouchers();
-    const found = vouchers.find(v => v.voucherCode === query);
+    const found = await fetchVoucherByCode(query);
 
     if (found) {
       setResult(found);
