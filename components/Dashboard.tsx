@@ -13,16 +13,18 @@ export const Dashboard: React.FC = () => {
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [vouchersLoading, setVouchersLoading] = useState(true);
 
+  // Dashboard Overview Filters (Defaults to TODAY to prevent Firebase Quota Explosion)
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [overviewDateRange, setOverviewDateRange] = useState({ start: todayStr, end: todayStr });
+  const [overviewCategory, setOverviewCategory] = useState<string>('');
+
   useEffect(() => {
-      fetchVouchers().then(data => {
+      setVouchersLoading(true);
+      fetchVouchers(false, overviewDateRange.start, overviewDateRange.end).then(data => {
           setVouchers(data);
           setVouchersLoading(false);
       });
-  }, []);
-
-  // Dashboard Overview Filters
-  const [overviewDateRange, setOverviewDateRange] = useState({ start: '', end: '' });
-  const [overviewCategory, setOverviewCategory] = useState<string>('');
+  }, [overviewDateRange.start, overviewDateRange.end]);
 
   // --- Expiry Alert ---
   const expiringVouchers = useMemo(() => {

@@ -279,19 +279,32 @@ export const removeSalesPerson = async (name: string): Promise<void> => {
 
 // --- VOUCHERS ---
 
-let cachedVouchers: Voucher[] | null = null;
-let lastFetchTime = 0;
+let voucherCache: Record<string, { data: Voucher[], timestamp: number }> = {};
 
-export const fetchVouchers = async (force = false): Promise<Voucher[]> => {
-    if (!force && cachedVouchers && Date.now() - lastFetchTime < 5 * 60 * 1000) {
-        return cachedVouchers;
+export const fetchVouchers = async (force = false, startDate?: string, endDate?: string): Promise<Voucher[]> => {
+    const cacheKey = `${startDate || 'all'}_${endDate || 'all'}`;
+
+    if (!force && voucherCache[cacheKey] && Date.now() - voucherCache[cacheKey].timestamp < 5 * 60 * 1000) {
+        return voucherCache[cacheKey].data;
     }
-    const snapshot = await getDocs(collection(db, VOUCHERS_COL));
+
+    let q: any = collection(db, VOUCHERS_COL);
+    if (startDate && endDate) {
+        q = query(collection(db, VOUCHERS_COL), 
+            where('dates.soldAt', '>=', startDate),
+            where('dates.soldAt', '<=', endDate + 'T23:59:59')
+        );
+    } else if (startDate) {
+        q = query(collection(db, VOUCHERS_COL), where('dates.soldAt', '>=', startDate));
+    } else if (endDate) {
+        q = query(collection(db, VOUCHERS_COL), where('dates.soldAt', '<=', endDate + 'T23:59:59'));
+    }
+
+    const snapshot = await getDocs(q);
     const vouchers: Voucher[] = [];
     snapshot.forEach((doc) => vouchers.push(doc.data() as Voucher));
     
-    cachedVouchers = vouchers;
-    lastFetchTime = Date.now();
+    voucherCache[cacheKey] = { data: vouchers, timestamp: Date.now() };
     return vouchers;
 };
 

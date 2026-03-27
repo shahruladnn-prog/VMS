@@ -44,16 +44,24 @@ export const Reports: React.FC = () => {
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [vouchersLoading, setVouchersLoading] = useState(true);
 
+  const todayStr = new Date().toISOString().split('T')[0];
+  
+  // Filter State (Defaults to TODAY to prevent Firebase Quota Explosion)
+  const [dateRange, setDateRange] = useState({ start: todayStr, end: todayStr });
+  const [filterType, setFilterType] = useState<'all' | 'event' | 'salesperson' | 'payment' | 'category'>('all');
+
   const loadVouchers = async (force = false) => {
       setVouchersLoading(true);
-      const data = await fetchVouchers(force);
+      const data = await fetchVouchers(force, dateRange.start, dateRange.end);
       setVouchers(data);
       setVouchersLoading(false);
   };
 
   useEffect(() => {
+      // Re-fetch only when date boundaries change natively
       loadVouchers();
-  }, []);
+  }, [dateRange.start, dateRange.end]);
+
   const [activeTab, setActiveTab] = useState<ReportTab>('transactions');
 
   // Bulk selection
@@ -61,9 +69,7 @@ export const Reports: React.FC = () => {
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
 
-  // Filter State
-  const [dateRange, setDateRange] = useState({ start: '', end: '' });
-  const [filterType, setFilterType] = useState<'all' | 'event' | 'salesperson' | 'payment' | 'category'>('all');
+  // Other filters
   const [filterValue, setFilterValue] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');

@@ -30,7 +30,7 @@ if (!getApps().length) {
 
 const db = getFirestore();
 
-// Helper: send branded email natively via NodeMailer SMTP
+// Helper: send branded email natively via NodeMailer SMTP (Batched per customer)
 async function sendVoucherEmail(settings, vouchers) {
   const es = settings?.email;
   // Make sure SMTP is configured
@@ -40,70 +40,90 @@ async function sendVoucherEmail(settings, vouchers) {
   const biz = settings?.receipt?.businessName || 'Gopeng Glamping Park';
   const vp = settings?.voucherPage || {};
 
-  for (const voucher of vouchers) {
-    if (!voucher.email) continue;
+  // Group vouchers by email destination to prevent sending multiple emails for 1 order
+  const emailGroups = {};
+  for (const v of vouchers) {
+     if (!v.email) continue;
+     if (!emailGroups[v.email]) emailGroups[v.email] = [];
+     emailGroups[v.email].push(v);
+  }
 
-    const expiryFormatted = voucher.dates?.expiryDate
-      ? new Date(voucher.dates.expiryDate).toLocaleDateString('en-MY', { day: 'numeric', month: 'long', year: 'numeric' })
-      : 'N/A';
+  // Set up transport once
+  let transporter;
+  try {
+    transporter = nodemailer.createTransport({
+      host: es.smtpHost,
+      port: Number(es.smtpPort),
+      secure: Number(es.smtpPort) === 465,
+      auth: { user: es.smtpUser, pass: es.smtpPass },
+      tls: { rejectUnauthorized: false }
+    });
+  } catch(e) {
+    console.warn('Webhook: Nodemailer init failed:', e.message);
+    return;
+  }
 
-    const voucherUrl = `${appUrl}/voucher/${voucher.voucherCode}`;
+  // Iterate over unique customers
+  for (const [email, userVouchers] of Object.entries(emailGroups)) {
+    try {
+      const clientName = userVouchers[0].clientName || 'Valued Customer';
+      const orderTitle = userVouchers.length > 1 ? `Your ${userVouchers.length} E-Vouchers` : `Your E-Voucher`;
 
-    const body = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; background: #f9f9f9; padding: 0; border-radius: 12px; overflow: hidden;">
-        <div style="background: ${vp.primaryColor || '#0d9488'}; padding: 32px 24px; text-align: center;">
-          ${vp.logoUrl ? `<img src="${vp.logoUrl}" alt="${biz}" style="max-height: 60px; margin-bottom: 12px;" />` : ''}
-          <h1 style="color: white; margin: 0; font-size: 22px;">🎫 Your E-Voucher is Ready!</h1>
-          <p style="color: rgba(255,255,255,0.85); margin: 8px 0 0;">${biz}</p>
-        </div>
-
-        <div style="padding: 32px 24px; background: white;">
-          <p style="color: #374151; font-size: 16px;">Dear <strong>${voucher.clientName}</strong>,</p>
-          <p style="color: #374151;">Thank you for your purchase! Your e-voucher is ready to use.</p>
-
-          <div style="background: #f0fdf4; border: 2px solid #0d9488; border-radius: 12px; padding: 20px; margin: 24px 0;">
+      // Build individual voucher blocks
+      const voucherItemsHtml = userVouchers.map(voucher => {
+        const expiryFormatted = voucher.dates?.expiryDate
+          ? new Date(voucher.dates.expiryDate).toLocaleDateString('en-MY', { day: 'numeric', month: 'long', year: 'numeric' })
+          : 'N/A';
+        const voucherUrl = `${appUrl}/voucher/${voucher.voucherCode}`;
+        return `
+          <div style="background: #f0fdf4; border: 2px solid #0d9488; border-radius: 12px; padding: 20px; margin: 16px 0;">
             <h2 style="color: #0d9488; margin: 0 0 8px; font-size: 18px;">${voucher.voucherDetails?.name}</h2>
             <p style="color: #374151; margin: 4px 0;">Value: <strong>RM${voucher.voucherDetails?.value?.toFixed(2)}</strong></p>
             <p style="color: #374151; margin: 4px 0;">Code: <strong style="font-family: monospace; font-size: 16px; letter-spacing: 2px;">${voucher.voucherCode}</strong></p>
-            <p style="color: #dc2626; margin: 8px 0 0; font-weight: bold; font-size: 15px;">⚠️ Valid Until: ${expiryFormatted}</p>
+            <p style="color: #dc2626; margin: 8px 0 0; font-weight: bold; font-size: 14px;">⚠️ Valid Until: ${expiryFormatted}</p>
+            <div style="margin-top: 16px;">
+              <a href="${voucherUrl}" style="background: ${vp.primaryColor || '#0d9488'}; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-size: 14px; font-weight: bold; display: inline-block;">
+                View Voucher
+              </a>
+            </div>
+            <p style="color: #6b7280; font-size: 12px; margin: 8px 0 0;">Or link: <a href="${voucherUrl}" style="color: #0d9488;">${voucherUrl}</a></p>
+          </div>
+        `;
+      }).join('');
+
+      const body = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; background: #f9f9f9; padding: 0; border-radius: 12px; overflow: hidden;">
+          <div style="background: ${vp.primaryColor || '#0d9488'}; padding: 32px 24px; text-align: center;">
+            ${vp.logoUrl ? `<img src="${vp.logoUrl}" alt="${biz}" style="max-height: 60px; margin-bottom: 12px;" />` : ''}
+            <h1 style="color: white; margin: 0; font-size: 22px;">🎫 ${orderTitle} Are Ready!</h1>
+            <p style="color: rgba(255,255,255,0.85); margin: 8px 0 0;">${biz}</p>
           </div>
 
-          <div style="text-align: center; margin: 28px 0;">
-            <a href="${voucherUrl}" style="background: ${vp.primaryColor || '#0d9488'}; color: white; text-decoration: none; padding: 14px 36px; border-radius: 8px; font-size: 16px; font-weight: bold; display: inline-block;">
-              VIEW &amp; DOWNLOAD VOUCHER →
-            </a>
+          <div style="padding: 32px 24px; background: white;">
+            <p style="color: #374151; font-size: 16px;">Dear <strong>${clientName}</strong>,</p>
+            <p style="color: #374151;">Thank you for your purchase! Here are your e-vouchers:</p>
+            
+            ${voucherItemsHtml}
           </div>
 
-          <p style="color: #6b7280; font-size: 13px; text-align: center;">Or copy this link: <a href="${voucherUrl}" style="color: #0d9488;">${voucherUrl}</a></p>
+          <div style="background: #f3f4f6; padding: 20px 24px; text-align: center;">
+            <p style="color: #6b7280; font-size: 12px; margin: 0;">${vp.footerText || 'Non-refundable. Subject to availability.'}</p>
+            <p style="color: #9ca3af; font-size: 11px; margin: 8px 0 0;">
+              ${vp.contactEmail ? `📧 ${vp.contactEmail}` : ''} ${vp.contactPhone ? `| 📞 ${vp.contactPhone}` : ''}
+            </p>
+          </div>
         </div>
-
-        <div style="background: #f3f4f6; padding: 20px 24px; text-align: center;">
-          <p style="color: #6b7280; font-size: 12px; margin: 0;">${vp.footerText || 'Non-refundable. Subject to availability.'}</p>
-          <p style="color: #9ca3af; font-size: 11px; margin: 8px 0 0;">
-            ${vp.contactEmail ? `📧 ${vp.contactEmail}` : ''} ${vp.contactPhone ? `| 📞 ${vp.contactPhone}` : ''}
-          </p>
-        </div>
-      </div>
-    `;
-
-    try {
-      const transporter = nodemailer.createTransport({
-        host: es.smtpHost,
-        port: Number(es.smtpPort),
-        secure: Number(es.smtpPort) === 465,
-        auth: { user: es.smtpUser, pass: es.smtpPass },
-        tls: { rejectUnauthorized: false }
-      });
+      `;
 
       await transporter.sendMail({
         from: `"${es.senderName || biz}" <${es.senderEmail || es.smtpUser}>`,
-        to: voucher.email,
-        subject: `🎫 Your ${voucher.voucherDetails?.name} Voucher — ${biz}`,
+        to: email,
+        subject: `🎫 ${orderTitle} from ${biz}`,
         html: body
       });
-      console.log(`Webhook: Sent Native SMTP email to ${voucher.email}`);
+      console.log(`Webhook: Sent Batch SMTP email with ${userVouchers.length} vouchers to ${email}`);
     } catch (e) {
-      console.warn(`Webhook: failed to send SMTP email to ${voucher.email}:`, e.message);
+      console.warn(`Webhook: failed to send SMTP email to ${email}:`, e.message);
     }
   }
 }
