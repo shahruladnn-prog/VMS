@@ -293,6 +293,23 @@ export const VoucherPage: React.FC = () => {
               )}
             </div>
 
+            {/* Agent gift badge — shown only on agent orders */}
+            {voucher.isAgentOrder && voucher.agentName && (
+              <div style={{ background: '#f0fdf4', border: `1px solid ${primary}30`, borderRadius: 8, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#374151' }}>
+                <span style={{ fontSize: 16 }}>🎁</span>
+                <span>Gifted by <strong style={{ color: primary }}>{voucher.agentName}</strong>
+                  {voucher.agentCode && <span style={{ color: '#9ca3af', fontSize: 11, marginLeft: 4 }}>({voucher.agentCode})</span>}
+                </span>
+              </div>
+            )}
+
+            {/* Personal message from agent */}
+            {voucher.clientMessage && (
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderLeft: `3px solid ${primary}`, borderRadius: '0 8px 8px 0', padding: '10px 14px', fontSize: 13, color: '#374151', fontStyle: 'italic' }}>
+                💬 "{voucher.clientMessage}"
+              </div>
+            )}
+
             {/* Terms */}
             {voucher.voucherDetails?.terms && (
               <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 12 }}>

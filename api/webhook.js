@@ -40,12 +40,12 @@ async function sendVoucherEmail(settings, vouchers) {
   const biz = settings?.receipt?.businessName || 'Gopeng Glamping Park';
   const vp = settings?.voucherPage || {};
 
-  // Group vouchers by email destination to prevent sending multiple emails for 1 order
+  // Group vouchers by client email to avoid duplicates for same client
   const emailGroups = {};
   for (const v of vouchers) {
-     if (!v.email) continue;
-     if (!emailGroups[v.email]) emailGroups[v.email] = [];
-     emailGroups[v.email].push(v);
+    if (!v.email) continue;
+    if (!emailGroups[v.email]) emailGroups[v.email] = [];
+    emailGroups[v.email].push(v);
   }
 
   // Set up transport once
@@ -63,10 +63,15 @@ async function sendVoucherEmail(settings, vouchers) {
     return;
   }
 
-  // Iterate over unique customers
+  // Iterate over unique clients
   for (const [email, userVouchers] of Object.entries(emailGroups)) {
     try {
       const clientName = userVouchers[0].clientName || 'Valued Customer';
+      const isAgentOrder = userVouchers[0].isAgentOrder === true;
+      const agentName = userVouchers[0].agentName || '';
+      const agentCode = userVouchers[0].agentCode || '';
+      const agentEmail = userVouchers[0].agentEmail || '';
+
       const orderTitle = userVouchers.length > 1 ? `Your ${userVouchers.length} E-Vouchers` : `Your E-Voucher`;
 
       // Build individual voucher blocks
@@ -75,12 +80,20 @@ async function sendVoucherEmail(settings, vouchers) {
           ? new Date(voucher.dates.expiryDate).toLocaleDateString('en-MY', { day: 'numeric', month: 'long', year: 'numeric' })
           : 'N/A';
         const voucherUrl = `${appUrl}/voucher/${voucher.voucherCode}`;
+        // Per-voucher personal message (from agent)
+        const msgHtml = voucher.clientMessage
+          ? `<div style="background:#f0fdf4;border-left:3px solid #0d9488;padding:10px 14px;margin:10px 0;border-radius:6px;font-style:italic;color:#374151;font-size:13px;">
+               💬 "${voucher.clientMessage}"<br/>
+               <span style="font-size:11px;color:#6b7280;font-style:normal;">— ${agentName}</span>
+             </div>`
+          : '';
         return `
           <div style="background: #f0fdf4; border: 2px solid #0d9488; border-radius: 12px; padding: 20px; margin: 16px 0;">
             <h2 style="color: #0d9488; margin: 0 0 8px; font-size: 18px;">${voucher.voucherDetails?.name}</h2>
             <p style="color: #374151; margin: 4px 0;">Value: <strong>RM${voucher.voucherDetails?.value?.toFixed(2)}</strong></p>
             <p style="color: #374151; margin: 4px 0;">Code: <strong style="font-family: monospace; font-size: 16px; letter-spacing: 2px;">${voucher.voucherCode}</strong></p>
             <p style="color: #dc2626; margin: 8px 0 0; font-weight: bold; font-size: 14px;">⚠️ Valid Until: ${expiryFormatted}</p>
+            ${msgHtml}
             <div style="margin-top: 16px;">
               <a href="${voucherUrl}" style="background: ${vp.primaryColor || '#0d9488'}; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-size: 14px; font-weight: bold; display: inline-block;">
                 View Voucher
@@ -91,19 +104,33 @@ async function sendVoucherEmail(settings, vouchers) {
         `;
       }).join('');
 
+      // Agent attribution line (shown in client email when it's an agent order)
+      const agentAttributionHtml = isAgentOrder && agentName
+        ? `<p style="color: #6b7280; font-size: 13px; margin: 16px 0 0; padding-top: 16px; border-top: 1px solid #e5e7eb;">
+             🎁 This voucher was gifted to you by <strong style="color: #374151;">${agentName}</strong>
+             <span style="color: #9ca3af; font-size: 11px;"> (${agentCode})</span> via ${biz}
+           </p>`
+        : '';
+
+      // Opening message differs for agent vs self-purchase
+      const openingHtml = isAgentOrder && agentName
+        ? `<p style="color: #374151; font-size: 16px;">Dear <strong>${clientName}</strong>,</p>
+           <p style="color: #374151;">You've received a special gift from <strong>${agentName}</strong>! Here are your e-voucher(s):</p>`
+        : `<p style="color: #374151; font-size: 16px;">Dear <strong>${clientName}</strong>,</p>
+           <p style="color: #374151;">Thank you for your purchase! Here are your e-vouchers:</p>`;
+
       const body = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; background: #f9f9f9; padding: 0; border-radius: 12px; overflow: hidden;">
           <div style="background: ${vp.primaryColor || '#0d9488'}; padding: 32px 24px; text-align: center;">
             ${vp.logoUrl ? `<img src="${vp.logoUrl}" alt="${biz}" style="max-height: 60px; margin-bottom: 12px;" />` : ''}
-            <h1 style="color: white; margin: 0; font-size: 22px;">🎫 ${orderTitle} Are Ready!</h1>
+            <h1 style="color: white; margin: 0; font-size: 22px;">🎫 ${orderTitle} ${isAgentOrder ? '— A Gift For You!' : 'Are Ready!'}</h1>
             <p style="color: rgba(255,255,255,0.85); margin: 8px 0 0;">${biz}</p>
           </div>
 
           <div style="padding: 32px 24px; background: white;">
-            <p style="color: #374151; font-size: 16px;">Dear <strong>${clientName}</strong>,</p>
-            <p style="color: #374151;">Thank you for your purchase! Here are your e-vouchers:</p>
-            
+            ${openingHtml}
             ${voucherItemsHtml}
+            ${agentAttributionHtml}
           </div>
 
           <div style="background: #f3f4f6; padding: 20px 24px; text-align: center;">
@@ -115,18 +142,56 @@ async function sendVoucherEmail(settings, vouchers) {
         </div>
       `;
 
+      const emailSubject = isAgentOrder && agentName
+        ? `🎁 ${orderTitle} — A Gift from ${agentName}`
+        : `🎫 ${orderTitle} from ${biz}`;
+
       await transporter.sendMail({
         from: `"${es.senderName || biz}" <${es.senderEmail || es.smtpUser}>`,
         to: email,
-        subject: `🎫 ${orderTitle} from ${biz}`,
+        subject: emailSubject,
         html: body
       });
-      console.log(`Webhook: Sent Batch SMTP email with ${userVouchers.length} vouchers to ${email}`);
+      console.log(`Webhook: Sent email with ${userVouchers.length} voucher(s) to client ${email}`);
+
+      // ── BCC / Agent Confirmation email ──
+      // Send a brief confirmation to the agent for each unique client batch
+      if (isAgentOrder && agentEmail && agentEmail !== email) {
+        try {
+          const confirmSubject = `✅ Voucher${userVouchers.length > 1 ? 's' : ''} sent to ${clientName} — Confirmation`;
+          const confirmBody = `
+            <div style="font-family: Arial, sans-serif; max-width: 500px; margin: auto; background: white; padding: 32px; border-radius: 12px; border: 1px solid #e5e7eb;">
+              <h2 style="color: #0d9488; margin: 0 0 16px;">✅ Delivery Confirmed</h2>
+              <p style="color: #374151; margin: 0 0 16px;">
+                Your voucher${userVouchers.length > 1 ? 's have' : ' has'} been sent to <strong>${clientName}</strong> at <strong>${email}</strong>.
+              </p>
+              <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
+                <thead><tr style="background:#f9fafb;"><th style="text-align:left;padding:8px 12px;font-size:12px;color:#6b7280;border:1px solid #e5e7eb;">Voucher</th><th style="text-align:left;padding:8px 12px;font-size:12px;color:#6b7280;border:1px solid #e5e7eb;">Code</th><th style="text-align:right;padding:8px 12px;font-size:12px;color:#6b7280;border:1px solid #e5e7eb;">Value</th></tr></thead>
+                <tbody>
+                  ${userVouchers.map(v => `<tr><td style="padding:8px 12px;border:1px solid #e5e7eb;font-size:13px;">${v.voucherDetails?.name}</td><td style="padding:8px 12px;border:1px solid #e5e7eb;font-family:monospace;font-size:13px;">${v.voucherCode}</td><td style="padding:8px 12px;border:1px solid #e5e7eb;text-align:right;font-weight:bold;">RM${v.voucherDetails?.value?.toFixed(2)}</td></tr>`).join('')}
+                </tbody>
+              </table>
+              <p style="color:#9ca3af;font-size:11px;margin:0;">${agentName} · ${agentCode} — GGP Agent Portal</p>
+            </div>
+          `;
+          await transporter.sendMail({
+            from: `"${es.senderName || biz}" <${es.senderEmail || es.smtpUser}>`,
+            to: agentEmail,
+            subject: confirmSubject,
+            html: confirmBody
+          });
+          console.log(`Webhook: Sent agent confirmation to ${agentEmail} for client ${email}`);
+        } catch (e) {
+          console.warn(`Webhook: Failed agent BCC to ${agentEmail}:`, e.message);
+        }
+      }
+
     } catch (e) {
-      console.warn(`Webhook: failed to send SMTP email to ${email}:`, e.message);
+      console.warn(`Webhook: failed to send email to ${email}:`, e.message);
     }
   }
 }
+
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {

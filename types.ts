@@ -5,6 +5,20 @@ export enum UserRole {
   OPERATIONS = 'OPERATIONS'
 }
 
+// --- AGENT ---
+export interface Agent {
+  id: string;
+  email: string;
+  password?: string;       // SHA-256 hashed
+  fullName: string;
+  companyName?: string;
+  phone?: string;
+  status: 'active' | 'suspended';
+  agentCode: string;       // e.g. "AGT-0042" — shown in voucher emails
+  createdAt: string;       // ISO timestamp
+  notes?: string;          // internal admin notes
+}
+
 export enum VoucherStatus {
   PENDING_PAYMENT = 'Pending Payment',
   ACTIVE = 'Active',
@@ -75,7 +89,15 @@ export interface Voucher {
   };
   // Chip-in integration fields
   chipinPurchaseId?: string;
-  saleChannel?: 'POS' | 'Online';
+  saleChannel?: 'POS' | 'Online' | 'Agent';
+  // Agent portal fields (all optional — absent on POS/Online vouchers)
+  isAgentOrder?: boolean;
+  agentId?: string;
+  agentCode?: string;       // e.g. "AGT-0042"
+  agentName?: string;       // denormalised for email webhook (no extra DB read)
+  agentEmail?: string;      // for BCC confirmation to agent
+  clientMessage?: string;   // personal note from agent to client
+
 }
 
 export interface Stats {

@@ -34,7 +34,7 @@ const InputGroup: React.FC<{ label: string; value: string; onChange: (v: string)
   </div>
 );
 
-type ReportTab = 'transactions' | 'by-item' | 'by-employee' | 'by-payment';
+type ReportTab = 'transactions' | 'by-item' | 'by-employee' | 'by-payment' | 'by-agent';
 
 const PAGE_SIZE = 20;
 
@@ -160,6 +160,27 @@ export const Reports: React.FC = () => {
     });
     return Object.entries(map)
       .map(([name, data]) => ({ name, ...data }))
+      .sort((a, b) => b.revenue - a.revenue);
+  }, [paidData]);
+
+  // --- Analytics: Sales per Agent ---
+  const salesByAgent = useMemo(() => {
+    const map: Record<string, { count: number; revenue: number; clients: Set<string>; agentCode: string }> = {};
+    paidData.filter(v => v.isAgentOrder && v.agentName).forEach(v => {
+      const key = v.agentName!;
+      if (!map[key]) map[key] = { count: 0, revenue: 0, clients: new Set(), agentCode: v.agentCode || '' };
+      map[key].count++;
+      map[key].revenue += v.voucherDetails.value;
+      if (v.email) map[key].clients.add(v.email);
+    });
+    return Object.entries(map)
+      .map(([name, data]) => ({
+        name,
+        agentCode: data.agentCode,
+        count: data.count,
+        revenue: data.revenue,
+        uniqueClients: data.clients.size,
+      }))
       .sort((a, b) => b.revenue - a.revenue);
   }, [paidData]);
 
@@ -304,6 +325,7 @@ export const Reports: React.FC = () => {
     { id: 'by-item', label: 'By Item', icon: <ShoppingBag size={16} /> },
     { id: 'by-employee', label: 'By Employee', icon: <Users size={16} /> },
     { id: 'by-payment', label: 'By Payment', icon: <CreditCard size={16} /> },
+    { id: 'by-agent', label: 'By Agent', icon: <Activity size={16} /> },
   ];
 
   return (
@@ -495,7 +517,11 @@ export const Reports: React.FC = () => {
                       <td className="px-4 py-3 text-gray-700 max-w-[140px] truncate">{v.voucherDetails.name}</td>
                       <td className="px-4 py-3 text-gray-600 text-xs">{v.financials.paymentMethod || '-'}</td>
                       <td className="px-4 py-3">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold border ${v.saleChannel === 'Online' ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold border ${
+                          v.saleChannel === 'Online' ? 'bg-blue-100 text-blue-700 border-blue-200'
+                          : v.saleChannel === 'Agent' ? 'bg-teal-100 text-teal-700 border-teal-200'
+                          : 'bg-gray-100 text-gray-600 border-gray-200'
+                        }`}>
                           {v.saleChannel || 'POS'}
                         </span>
                       </td>
@@ -728,6 +754,78 @@ export const Reports: React.FC = () => {
               </tfoot>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* ===== TAB: BY AGENT ===== */}
+      {activeTab === 'by-agent' && (
+        <div className="space-y-6">
+          {salesByAgent.length === 0 ? (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+              <Activity size={40} className="mx-auto mb-4 text-gray-300" />
+              <p className="text-gray-500 font-medium">No agent orders found in this date range.</p>
+              <p className="text-gray-400 text-sm mt-1">Agent sales appear here once agents complete purchases through the Agent Portal.</p>
+            </div>
+          ) : (
+            <>
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2 text-lg"><Activity size={20} className="text-primary-600" /> Revenue by Agent</h3>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={salesByAgent} layout="vertical" margin={{ left: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" tickFormatter={v => `RM${v.toLocaleString()}`} tick={{ fontSize: 12 }} />
+                    <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 12 }} />
+                    <Tooltip formatter={(value: any) => [`RM${Number(value).toLocaleString()}`, 'Revenue']} />
+                    <Bar dataKey="revenue" radius={[0, 4, 4, 0]}>
+                      {salesByAgent.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-100 text-gray-700 font-extrabold uppercase text-xs tracking-wider border-b">
+                    <tr>
+                      <th className="px-5 py-3 text-left">#</th>
+                      <th className="px-5 py-3 text-left">Agent</th>
+                      <th className="px-5 py-3 text-left">Code</th>
+                      <th className="px-5 py-3 text-right">Vouchers</th>
+                      <th className="px-5 py-3 text-right">Unique Clients</th>
+                      <th className="px-5 py-3 text-right">Revenue</th>
+                      <th className="px-5 py-3 text-right">Avg / Voucher</th>
+                      <th className="px-5 py-3 text-right">% of Agent Rev</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {salesByAgent.map((agent, i) => {
+                      const agentTotal = salesByAgent.reduce((s, a) => s + a.revenue, 0);
+                      return (
+                        <tr key={agent.name} className="hover:bg-gray-50">
+                          <td className="px-5 py-3 text-gray-500 font-bold">{i + 1}</td>
+                          <td className="px-5 py-3 font-bold text-gray-900">{agent.name}</td>
+                          <td className="px-5 py-3 font-mono text-xs text-teal-700 bg-teal-50 rounded-lg">{agent.agentCode}</td>
+                          <td className="px-5 py-3 text-right font-bold text-gray-700">{agent.count}</td>
+                          <td className="px-5 py-3 text-right text-gray-600">{agent.uniqueClients}</td>
+                          <td className="px-5 py-3 text-right font-bold text-emerald-700">RM{agent.revenue.toLocaleString()}</td>
+                          <td className="px-5 py-3 text-right text-gray-500">RM{(agent.revenue / agent.count).toFixed(0)}</td>
+                          <td className="px-5 py-3 text-right text-gray-500">{agentTotal > 0 ? ((agent.revenue / agentTotal) * 100).toFixed(1) : '0'}%</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot className="bg-gray-50 border-t-2 border-gray-200">
+                    <tr>
+                      <td colSpan={3} className="px-5 py-3 font-extrabold text-gray-800">TOTAL (Agent Channel)</td>
+                      <td className="px-5 py-3 text-right font-extrabold text-gray-800">{salesByAgent.reduce((s, a) => s + a.count, 0)}</td>
+                      <td className="px-5 py-3 text-right font-extrabold text-gray-800">{salesByAgent.reduce((s, a) => s + a.uniqueClients, 0)}</td>
+                      <td className="px-5 py-3 text-right font-extrabold text-emerald-700">RM{salesByAgent.reduce((s, a) => s + a.revenue, 0).toLocaleString()}</td>
+                      <td colSpan={2} />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </>
+          )}
         </div>
       )}
 

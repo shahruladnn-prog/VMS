@@ -3,6 +3,8 @@
     { "source": "/api/:path*", "destination": "/api/:path*" },
     { "source": "/store/(.*)", "destination": "/index.html" },
     { "source": "/store", "destination": "/index.html" },
+    { "source": "/agent/(.*)", "destination": "/index.html" },
+    { "source": "/agent", "destination": "/index.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

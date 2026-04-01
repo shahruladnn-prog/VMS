@@ -373,6 +373,21 @@ export const createBatchVouchers = async (vouchers: Voucher[]): Promise<void> =>
     await Promise.all(vouchers.map(v => setDoc(doc(db, VOUCHERS_COL, v.id), v)));
 };
 
+// Fetch all vouchers purchased through the Agent Portal by a specific agent
+// Used by AgentDashboard — queries by agentId field, sorted newest first
+export const fetchVouchersByAgent = async (agentId: string): Promise<Voucher[]> => {
+    const q = query(
+        collection(db, VOUCHERS_COL),
+        where('agentId', '==', agentId),
+        orderBy('dates.soldAt', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    const vouchers: Voucher[] = [];
+    snapshot.forEach(d => vouchers.push(d.data() as Voucher));
+    return vouchers;
+};
+
+
 export const updateVoucher = async (updatedVoucher: Voucher): Promise<void> => {
     await updateDoc(doc(db, VOUCHERS_COL, updatedVoucher.id), { ...updatedVoucher });
 };

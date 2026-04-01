@@ -13,6 +13,11 @@ import { OnlineStore } from './components/OnlineStore';
 import { VoucherCheck } from './components/VoucherCheck';
 import { VoucherPage } from './components/VoucherPage';
 import { PaymentSuccess, PaymentFailure } from './components/PaymentPages';
+import { AgentLogin } from './components/AgentLogin';
+import { AgentStore } from './components/AgentStore';
+import { AgentPaymentSuccess } from './components/AgentPaymentSuccess';
+import { AgentDashboard } from './components/AgentDashboard';
+import { AgentProfile } from './components/AgentProfile';
 import { getCurrentUser } from './services/voucherService';
 import { AppDataProvider } from './context/AppDataContext';
 import { User, UserRole } from './types';
@@ -21,11 +26,18 @@ import { Menu } from 'lucide-react';
 // Simple path-based routing for public pages (no login required)
 const getRoute = () => {
   const path = window.location.pathname;
+  // Public store routes
   if (path === '/store' || path === '/store/') return 'store';
   if (path === '/store/success') return 'store-success';
   if (path === '/store/failure') return 'store-failure';
   if (path === '/check' || path === '/check/') return 'check';
   if (path.startsWith('/voucher/') && path.length > '/voucher/'.length) return 'voucher';
+  // Agent portal routes
+  if (path === '/agent' || path === '/agent/') return 'agent-login';
+  if (path === '/agent/store' || path === '/agent/store/') return 'agent-store';
+  if (path === '/agent/store/success') return 'agent-success';
+  if (path === '/agent/dashboard' || path === '/agent/dashboard/') return 'agent-dashboard';
+  if (path === '/agent/profile' || path === '/agent/profile/') return 'agent-profile';
   return null;
 };
 
@@ -69,6 +81,12 @@ const App: React.FC = () => {
   if (publicRoute === 'store-failure') return <PaymentFailure />;
   if (publicRoute === 'check') return <VoucherCheck />;
   if (publicRoute === 'voucher') return <VoucherPage />;
+  // --- AGENT PORTAL ROUTES ---
+  if (publicRoute === 'agent-login') return <AgentLogin />;
+  if (publicRoute === 'agent-store') return <AgentStore />;
+  if (publicRoute === 'agent-success') return <AgentPaymentSuccess />;
+  if (publicRoute === 'agent-dashboard') return <AgentDashboard />;
+  if (publicRoute === 'agent-profile') return <AgentProfile />;
 
   // --- AUTHENTICATED ROUTES ---
   if (!user) return <Login onLogin={handleLogin} />;

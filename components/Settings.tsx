@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { fetchSettings, saveSettings, fetchUsers, addUser, updateUser, deleteUser, fetchPromoCodes, savePromoCode, deletePromoCode, fetchAuditLog } from '../services/voucherService';
-import { SystemSettings, User, UserRole, PromoCode, AuditLogEntry } from '../types';
-import { Save, Printer, Mail, Layout, Terminal, Code, Download, Zap, Globe, Info, Users, Tag, Shield, Plus, Trash, Edit, X, Clock } from 'lucide-react';
+import { fetchAgents, createAgent, updateAgent, deleteAgent } from '../services/agentService';
+import { SystemSettings, User, UserRole, PromoCode, AuditLogEntry, Agent } from '../types';
+import { Save, Printer, Mail, Layout, Terminal, Code, Download, Zap, Globe, Info, Users, Tag, Shield, Plus, Trash, Edit, X, Clock, Briefcase } from 'lucide-react';
 
 const ALL_ROLES = [UserRole.ADMIN, UserRole.SALES, UserRole.CASHIER, UserRole.OPERATIONS];
 const ROLE_COLORS: Record<UserRole, string> = {
@@ -13,7 +14,7 @@ const ROLE_COLORS: Record<UserRole, string> = {
 
 export const Settings: React.FC = () => {
   const [settings, setSettings] = useState<SystemSettings | null>(null);
-  const [activeTab, setActiveTab] = useState<'receipt' | 'email' | 'chipin' | 'evoucher' | 'users' | 'promoCodes' | 'auditLog'>('receipt');
+  const [activeTab, setActiveTab] = useState<'receipt' | 'email' | 'chipin' | 'evoucher' | 'users' | 'promoCodes' | 'auditLog' | 'agents'>('receipt');
   const [msg, setMsg] = useState('');
 
   // Users tab
@@ -29,6 +30,11 @@ export const Settings: React.FC = () => {
   // Audit Log tab
   const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
+
+  // Agents tab
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [editingAgent, setEditingAgent] = useState<Partial<Agent> | null>(null);
+  const [agentLoading, setAgentLoading] = useState(false);
 
   useEffect(() => {
     fetchSettings().then(s => {
@@ -46,11 +52,13 @@ export const Settings: React.FC = () => {
     if (activeTab === 'users') loadUsers();
     else if (activeTab === 'promoCodes') loadPromoCodes();
     else if (activeTab === 'auditLog') loadAuditLog();
+    else if (activeTab === 'agents') loadAgents();
   }, [activeTab]);
 
   const loadUsers = async () => { setUserLoading(true); setUsers(await fetchUsers()); setUserLoading(false); };
   const loadPromoCodes = async () => { setPromoLoading(true); setPromoCodes(await fetchPromoCodes()); setPromoLoading(false); };
   const loadAuditLog = async () => { setAuditLoading(true); setAuditLog(await fetchAuditLog()); setAuditLoading(false); };
+  const loadAgents = async () => { setAgentLoading(true); setAgents(await fetchAgents()); setAgentLoading(false); };
 
   const handleSave = async () => {
     if (settings) {
@@ -164,12 +172,50 @@ if (mail($input['to'], $input['subject'], $input['body'], $headers, "-f" . $from
     ? `${window.location.origin}/api/webhook`
     : 'https://your-app.vercel.app/api/webhook';
 
+  const handleSaveAgent = async () => {
+    if (!editingAgent?.fullName) return alert('Please enter Full Name');
+    if (!editingAgent?.email || !editingAgent.email.includes('@')) return alert('Please enter a valid Email');
+    if (!(editingAgent as any)._isEditing && !editingAgent?.password) return alert('Please set an initial Password');
+    try {
+      if ((editingAgent as any)._isEditing && editingAgent.id) {
+        const existing = agents.find(a => a.id === editingAgent.id)!;
+        await updateAgent({ ...existing, ...editingAgent } as Agent);
+      } else {
+        await createAgent({
+          fullName: editingAgent.fullName!,
+          email: editingAgent.email!,
+          password: editingAgent.password,
+          companyName: editingAgent.companyName,
+          phone: editingAgent.phone,
+          status: 'active',
+          notes: editingAgent.notes,
+        });
+      }
+      setEditingAgent(null);
+      loadAgents();
+    } catch (e: any) { alert('Error: ' + e.message); }
+  };
+
+  const handleDeleteAgent = async (id: string, name: string) => {
+    if (confirm(`Delete agent "${name}"? This cannot be undone.`)) {
+      await deleteAgent(id);
+      loadAgents();
+    }
+  };
+
+  const handleToggleAgentStatus = async (agent: Agent) => {
+    const newStatus = agent.status === 'active' ? 'suspended' : 'active';
+    await updateAgent({ ...agent, status: newStatus });
+    loadAgents();
+  };
+
   const tabs = [
     { id: 'receipt', label: 'Receipt', icon: <Printer size={18}/> },
     { id: 'email', label: 'Email', icon: <Mail size={18}/> },
     { id: 'chipin', label: 'Chip-in', icon: <Zap size={18}/> },
     { id: 'evoucher', label: 'E-Voucher', icon: <Globe size={18}/> },
     { id: 'users', label: 'Users', icon: <Users size={18}/> },
+    { id: 'agents', label: 'Agents', icon: <Briefcase size={18}/> },
     { id: 'promoCodes', label: 'Promo Codes', icon: <Tag size={18}/> },
     { id: 'auditLog', label: 'Audit Log', icon: <Shield size={18}/> },
   ];
@@ -617,8 +663,64 @@ if (mail($input['to'], $input['subject'], $input['body'], $headers, "-f" . $from
           </div>
         </div>
 
-        {/* Save Button — only for receipt/email/chipin tabs */}
-        {['receipt', 'email', 'chipin'].includes(activeTab) && (
+        {/* ---- AGENTS TAB ---- */}
+            {activeTab === 'agents' && (
+              <div className="animate-in fade-in duration-300">
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h2 className="text-xl font-extrabold text-gray-900 flex items-center gap-2"><Briefcase /> Agent Management</h2>
+                    <p className="text-gray-500 text-sm mt-1">Agents can log in at <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">/agent</code> to purchase vouchers for their clients.</p>
+                  </div>
+                  <button onClick={() => setEditingAgent({ status: 'active' })}
+                    className="bg-primary-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-primary-700 shadow-sm text-sm">
+                    <Plus size={16}/> New Agent
+                  </button>
+                </div>
+
+                {agentLoading ? <div className="text-center py-12 text-gray-400">Loading agents...</div> : (
+                  <div className="space-y-2">
+                    {agents.length === 0 && (
+                      <div className="text-center py-12 text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
+                        No agents yet. Create one above.
+                      </div>
+                    )}
+                    {agents.map(a => (
+                      <div key={a.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200 hover:bg-gray-100 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-extrabold text-sm border border-emerald-200">
+                            {a.fullName.charAt(0)}
+                          </div>
+                          <div>
+                            <p className="font-bold text-gray-900">{a.fullName}</p>
+                            <p className="text-xs text-gray-500">{a.email} · {a.companyName || '—'}</p>
+                          </div>
+                          <span className="font-mono text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded-lg ml-2">{a.agentCode}</span>
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${a.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>
+                            {a.status}
+                          </span>
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => handleToggleAgentStatus(a)}
+                            title={a.status === 'active' ? 'Suspend' : 'Activate'}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                              a.status === 'active' ? 'bg-amber-50 text-amber-600 hover:bg-amber-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
+                            }`}>
+                            {a.status === 'active' ? 'Suspend' : 'Activate'}
+                          </button>
+                          <button onClick={() => setEditingAgent({ ...a, _isEditing: true } as any)}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit size={16}/></button>
+                          <button onClick={() => handleDeleteAgent(a.id, a.fullName)}
+                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash size={16}/></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ---- SAVE BUTTON AREA (passthrough, placed after all tabs) ---- */}
+            {['receipt', 'email', 'chipin'].includes(activeTab) && (
           <div className="mt-8 flex justify-end">
             <button onClick={handleSave}
               className="bg-primary-600 hover:bg-primary-700 text-white font-extrabold py-4 px-8 rounded-xl text-lg shadow-lg hover:shadow-primary-500/30 transition-all active:scale-[0.98] flex items-center gap-3">
@@ -722,6 +824,65 @@ if (mail($input['to'], $input['subject'], $input['body'], $headers, "-f" . $from
             <div className="flex justify-end gap-3 p-6 border-t">
               <button onClick={() => setEditingPromo(null)} className="px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl font-bold">Cancel</button>
               <button onClick={handleSavePromo} className="px-6 py-2.5 bg-primary-600 text-white rounded-xl hover:bg-primary-700 font-bold shadow-md">Save Promo Code</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== AGENT EDIT MODAL ===== */}
+      {editingAgent && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl animate-in zoom-in duration-200 overflow-hidden">
+            <div className="bg-teal-900 p-5 flex justify-between items-center">
+              <div>
+                <h3 className="text-xl font-extrabold text-white">{(editingAgent as any)._isEditing ? 'Edit Agent' : 'New Agent'}</h3>
+                <p className="text-teal-400 text-xs mt-0.5">Agent logs in at /agent with their email & password</p>
+              </div>
+              <button onClick={() => setEditingAgent(null)} className="text-teal-400 hover:text-white p-1"><X size={22}/></button>
+            </div>
+            <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <label className={labelClass}>Full Name *</label>
+                  <input className={inputClass} value={editingAgent.fullName || ''}
+                    onChange={e => setEditingAgent({...editingAgent, fullName: e.target.value})} placeholder="Ahmad Razif Bin Zainal" />
+                </div>
+                <div className="col-span-2">
+                  <label className={labelClass}>Email Address * (used to login)</label>
+                  <input className={inputClass} type="email" value={editingAgent.email || ''}
+                    disabled={(editingAgent as any)._isEditing}
+                    onChange={e => setEditingAgent({...editingAgent, email: e.target.value})} placeholder="agent@company.com" />
+                </div>
+                <div className="col-span-2">
+                  <label className={labelClass}>{(editingAgent as any)._isEditing ? 'New Password (blank = no change)' : 'Initial Password *'}</label>
+                  <input className={inputClass} type="password" value={editingAgent.password || ''}
+                    onChange={e => setEditingAgent({...editingAgent, password: e.target.value})} placeholder="••••••••" />
+                  {!(editingAgent as any)._isEditing && (
+                    <p className="text-xs text-gray-400 mt-1">Default: agent123 (if left blank)</p>
+                  )}
+                </div>
+                <div>
+                  <label className={labelClass}>Company Name</label>
+                  <input className={inputClass} value={editingAgent.companyName || ''}
+                    onChange={e => setEditingAgent({...editingAgent, companyName: e.target.value})} placeholder="XYZ Travel Sdn Bhd" />
+                </div>
+                <div>
+                  <label className={labelClass}>Phone</label>
+                  <input className={inputClass} value={editingAgent.phone || ''}
+                    onChange={e => setEditingAgent({...editingAgent, phone: e.target.value})} placeholder="01X-XXXXXXX" />
+                </div>
+                <div className="col-span-2">
+                  <label className={labelClass}>Internal Notes</label>
+                  <textarea className={inputClass} rows={2} value={editingAgent.notes || ''}
+                    onChange={e => setEditingAgent({...editingAgent, notes: e.target.value})} placeholder="e.g. Referred by Ahmad, specialises in corporate packages" />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 p-5 border-t bg-gray-50">
+              <button onClick={() => setEditingAgent(null)} className="px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl font-bold">Cancel</button>
+              <button onClick={handleSaveAgent} className="px-6 py-2.5 bg-teal-700 hover:bg-teal-800 text-white rounded-xl font-bold shadow-md flex items-center gap-2">
+                <Save size={16} /> {(editingAgent as any)._isEditing ? 'Save Changes' : 'Create Agent'}
+              </button>
             </div>
           </div>
         </div>
