@@ -14,7 +14,7 @@
 //   FIREBASE_PRIVATE_KEY   — from Firebase service account JSON
 
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import nodemailer from 'nodemailer';
 
 // Initialize Firebase Admin (singleton pattern prevents re-init on warm starts)
@@ -30,17 +30,43 @@ if (!getApps().length) {
 
 const db = getFirestore();
 
-// Helper: send branded email natively via NodeMailer SMTP (Batched per customer)
+// ─── IDEMPOTENCY ─────────────────────────────────────────────────────────────
+// Uses Firestore transactions to guarantee exactly-once processing.
+// If the lock document already exists, the webhook silently returns 200.
+// Chip-in retries on non-2xx, so returning 200 stops the retry cycle.
+async function acquireProcessingLock(purchaseId) {
+  const lockRef = db.collection('webhook_locks').doc(purchaseId);
+  try {
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(lockRef);
+      if (snap.exists) {
+        // Already processed — throw to abort transaction and signal duplicate
+        throw new Error('ALREADY_PROCESSED');
+      }
+      tx.set(lockRef, {
+        purchaseId,
+        processedAt: FieldValue.serverTimestamp(),
+        // Auto-cleanup: Cloud Firestore TTL can delete these after 7 days
+        ttl: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      });
+    });
+    return true;  // Lock acquired — proceed
+  } catch (e) {
+    if (e.message === 'ALREADY_PROCESSED') return false;
+    throw e;      // Real error — re-throw
+  }
+}
+
+// ─── EMAIL ────────────────────────────────────────────────────────────────────
 async function sendVoucherEmail(settings, vouchers) {
   const es = settings?.email;
-  // Make sure SMTP is configured
   if (!es?.enabled || es?.provider !== 'SMTP' || !es?.smtpHost) return;
 
   const appUrl = settings?.chipin?.appUrl || 'https://vms.gptt.my';
   const biz = settings?.receipt?.businessName || 'Gopeng Glamping Park';
   const vp = settings?.voucherPage || {};
 
-  // Group vouchers by client email to avoid duplicates for same client
+  // Group vouchers by client email to send one email per client
   const emailGroups = {};
   for (const v of vouchers) {
     if (!v.email) continue;
@@ -48,7 +74,6 @@ async function sendVoucherEmail(settings, vouchers) {
     emailGroups[v.email].push(v);
   }
 
-  // Set up transport once
   let transporter;
   try {
     transporter = nodemailer.createTransport({
@@ -63,7 +88,6 @@ async function sendVoucherEmail(settings, vouchers) {
     return;
   }
 
-  // Iterate over unique clients
   for (const [email, userVouchers] of Object.entries(emailGroups)) {
     try {
       const clientName = userVouchers[0].clientName || 'Valued Customer';
@@ -74,13 +98,11 @@ async function sendVoucherEmail(settings, vouchers) {
 
       const orderTitle = userVouchers.length > 1 ? `Your ${userVouchers.length} E-Vouchers` : `Your E-Voucher`;
 
-      // Build individual voucher blocks
       const voucherItemsHtml = userVouchers.map(voucher => {
         const expiryFormatted = voucher.dates?.expiryDate
           ? new Date(voucher.dates.expiryDate).toLocaleDateString('en-MY', { day: 'numeric', month: 'long', year: 'numeric' })
           : 'N/A';
         const voucherUrl = `${appUrl}/voucher/${voucher.voucherCode}`;
-        // Per-voucher personal message (from agent)
         const msgHtml = voucher.clientMessage
           ? `<div style="background:#f0fdf4;border-left:3px solid #0d9488;padding:10px 14px;margin:10px 0;border-radius:6px;font-style:italic;color:#374151;font-size:13px;">
                💬 "${voucher.clientMessage}"<br/>
@@ -104,7 +126,6 @@ async function sendVoucherEmail(settings, vouchers) {
         `;
       }).join('');
 
-      // Agent attribution line (shown in client email when it's an agent order)
       const agentAttributionHtml = isAgentOrder && agentName
         ? `<p style="color: #6b7280; font-size: 13px; margin: 16px 0 0; padding-top: 16px; border-top: 1px solid #e5e7eb;">
              🎁 This voucher was gifted to you by <strong style="color: #374151;">${agentName}</strong>
@@ -112,7 +133,6 @@ async function sendVoucherEmail(settings, vouchers) {
            </p>`
         : '';
 
-      // Opening message differs for agent vs self-purchase
       const openingHtml = isAgentOrder && agentName
         ? `<p style="color: #374151; font-size: 16px;">Dear <strong>${clientName}</strong>,</p>
            <p style="color: #374151;">You've received a special gift from <strong>${agentName}</strong>! Here are your e-voucher(s):</p>`
@@ -154,8 +174,7 @@ async function sendVoucherEmail(settings, vouchers) {
       });
       console.log(`Webhook: Sent email with ${userVouchers.length} voucher(s) to client ${email}`);
 
-      // ── BCC / Agent Confirmation email ──
-      // Send a brief confirmation to the agent for each unique client batch
+      // Agent confirmation BCC
       if (isAgentOrder && agentEmail && agentEmail !== email) {
         try {
           const confirmSubject = `✅ Voucher${userVouchers.length > 1 ? 's' : ''} sent to ${clientName} — Confirmation`;
@@ -200,14 +219,11 @@ export default async function handler(req, res) {
 
   const event = req.body;
 
-  // Chip-in sends event.type = "purchase.paid" (confirmed from API docs)
-  // Also handle status === 'paid' as fallback for direct success_callback calls
   const isPaid = event?.type === 'purchase.paid' || event?.status === 'paid';
   if (!isPaid) {
     return res.status(200).json({ message: 'Event ignored', type: event?.type });
   }
 
-  // Purchase ID is at event.purchase.id (NOT event.id — that's the event/callback ID)
   const purchaseId = event?.purchase?.id || event?.id;
 
   if (!purchaseId) {
@@ -215,8 +231,27 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'No purchase ID in webhook payload' });
   }
 
+  // ── IDEMPOTENCY CHECK ──────────────────────────────────────────────────────
+  // Acquire a Firestore lock for this purchaseId.
+  // If another webhook invocation already holds the lock, return 200 immediately.
+  // This prevents double-emails when Chip-in retries on slow responses.
+  let lockAcquired = false;
   try {
-    // Load settings (for email sending after activation)
+    lockAcquired = await acquireProcessingLock(purchaseId);
+  } catch (lockErr) {
+    console.error('Webhook: lock error:', lockErr.message);
+    // On lock error, fall through and process anyway (fail-open)
+    lockAcquired = true;
+  }
+
+  if (!lockAcquired) {
+    console.log(`Webhook: duplicate call for purchaseId=${purchaseId} — skipped (already processed)`);
+    return res.status(200).json({ message: 'Already processed', purchaseId });
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
+  try {
+    // Load settings
     let settings = null;
     try {
       const settingsDoc = await db.collection('settings').doc('global').get();
@@ -225,14 +260,13 @@ export default async function handler(req, res) {
       console.warn('Webhook: could not load settings:', e.message);
     }
 
-    // Find all vouchers linked to this Chip-in purchase
+    // Find all vouchers linked to this purchase
     const snapshot = await db.collection('vouchers')
       .where('chipinPurchaseId', '==', purchaseId)
       .get();
 
     if (snapshot.empty) {
       console.warn(`Webhook: no vouchers found for chipinPurchaseId=${purchaseId}`);
-      // Return 200 so Chip-in doesn't retry (might be a POS sale or test event)
       return res.status(200).json({ message: 'No vouchers matched', purchaseId });
     }
 
@@ -253,7 +287,7 @@ export default async function handler(req, res) {
     await batch.commit();
     console.log(`Webhook: activated ${activatedVouchers.length} voucher(s) for purchaseId=${purchaseId}`);
 
-    // Send branded email with voucher link (BLOCKING to survive Vercel lambda freeze)
+    // Send emails (blocking — Vercel needs this to complete before lambda freezes)
     if (settings) {
       await sendVoucherEmail(settings, activatedVouchers).catch(e =>
         console.warn('Webhook: email send error:', e.message)
@@ -264,6 +298,10 @@ export default async function handler(req, res) {
 
   } catch (err) {
     console.error('Webhook error:', err);
+    // Release the lock on unexpected errors so a genuine retry can succeed
+    try {
+      await db.collection('webhook_locks').doc(purchaseId).delete();
+    } catch (_) { /* ignore */ }
     return res.status(500).json({ error: 'Internal server error', message: err.message });
   }
 }
