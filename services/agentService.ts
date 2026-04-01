@@ -122,14 +122,29 @@ export const createAgent = async (agentData: Omit<Agent, 'id' | 'agentCode' | 'c
     email: agentData.email.toLowerCase().trim(),
     status: agentData.status || 'active',
     createdAt: new Date().toISOString(),
+    // Default optional string fields to '' — Firestore rejects undefined
+    phone: agentData.phone || '',
+    companyName: agentData.companyName || '',
+    notes: agentData.notes || '',
   };
 
-  await setDoc(doc(db, AGENTS_COL, id), agent);
-  return agent;
+  // Strip any remaining undefined values
+  const clean = Object.fromEntries(
+    Object.entries(agent).filter(([, v]) => v !== undefined)
+  ) as Agent;
+
+  await setDoc(doc(db, AGENTS_COL, id), clean);
+  return clean;
 };
 
 export const updateAgent = async (agent: Agent, currentPassword?: string, newPassword?: string): Promise<void> => {
-  const updates: Partial<Agent> = { ...agent };
+  const updates: Partial<Agent> = {
+    ...agent,
+    // Ensure optional fields are never undefined
+    phone: agent.phone || '',
+    companyName: agent.companyName || '',
+    notes: agent.notes || '',
+  };
 
   if (newPassword) {
     // Self-service password change — verify current password first
@@ -153,8 +168,13 @@ export const updateAgent = async (agent: Agent, currentPassword?: string, newPas
   }
 
   updates.email = updates.email?.toLowerCase().trim();
-  await updateDoc(doc(db, AGENTS_COL, agent.id), { ...updates });
+  // Strip undefined values — Firestore rejects them
+  const cleanUpdates = Object.fromEntries(
+    Object.entries(updates).filter(([, v]) => v !== undefined)
+  );
+  await updateDoc(doc(db, AGENTS_COL, agent.id), cleanUpdates);
 };
+
 
 export const deleteAgent = async (id: string): Promise<void> => {
   await deleteDoc(doc(db, AGENTS_COL, id));
