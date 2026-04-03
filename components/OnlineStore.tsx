@@ -83,7 +83,7 @@ export const OnlineStore: React.FC = () => {
 
   useEffect(() => {
     fetchTemplates(true).then(all => {
-      setTemplates(all);
+      setTemplates(all.filter(t => t.sellOnline !== false));
       setLoading(false);
     });
   }, []);

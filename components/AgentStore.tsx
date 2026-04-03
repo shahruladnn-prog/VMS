@@ -100,7 +100,7 @@ export const AgentStore: React.FC = () => {
   const csvInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    fetchTemplates(true).then(all => { setTemplates(all); setLoading(false); });
+    fetchTemplates(true).then(all => { setTemplates(all.filter(t => t.sellOnline !== false)); setLoading(false); });
   }, []);
 
   const cartItems: CartItem[] = useMemo(() =>

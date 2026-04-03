@@ -40,6 +40,7 @@ export interface VoucherTemplate {
   category: string;
   value: number;
   isActive: boolean;
+  sellOnline?: boolean;
   defaultExpiryDate?: string;
   terms: string;
   highlights?: string;

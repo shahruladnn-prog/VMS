@@ -54,6 +54,7 @@ export const ProductCatalog: React.FC = () => {
         category: editing.category,
         value: Number(editing.value),
         isActive: editing.isActive ?? true,
+        sellOnline: editing.sellOnline !== false, // default true if undefined
         defaultExpiryDate: editing.defaultExpiryDate || undefined,
         terms: editing.terms || '',
         highlights: editing.highlights || '',
@@ -154,7 +155,7 @@ export const ProductCatalog: React.FC = () => {
                 <Settings size={18} /> Categories
             </button>
             <button 
-                onClick={() => setEditing({ isActive: true, category: categories[0] || 'General', defaultExpiryDate: '2025-12-31', terms: '' })}
+                onClick={() => setEditing({ isActive: true, sellOnline: true, category: categories[0] || 'General', defaultExpiryDate: '2025-12-31', terms: '' })}
                 className="bg-primary-600 text-white px-5 py-2.5 font-bold rounded-lg flex items-center gap-2 hover:bg-primary-700 shadow-md transition-transform active:scale-95"
             >
                 <Plus size={20} /> Add Product
@@ -180,8 +181,15 @@ export const ProductCatalog: React.FC = () => {
                     <button onClick={() => handleDelete(t.id)} className="p-2 bg-white text-red-500 rounded-full shadow-lg hover:bg-red-50 transition-colors"><Trash size={16} /></button>
                  </div>
                  
-                 <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-sm text-white text-xs font-bold px-2.5 py-1 rounded shadow-sm uppercase tracking-wide">
-                     {t.category}
+                 <div className="absolute bottom-3 left-3 flex gap-2">
+                     <span className="bg-black/70 backdrop-blur-sm text-white text-xs font-bold px-2.5 py-1 rounded shadow-sm uppercase tracking-wide">
+                         {t.category}
+                     </span>
+                     {t.sellOnline === false && (
+                         <span className="bg-amber-600 text-white text-[10px] font-extrabold px-2 py-1 rounded shadow-sm uppercase tracking-wide flex items-center">
+                             POS ONLY
+                         </span>
+                     )}
                  </div>
                  {!t.isActive && (
                     <div className="absolute inset-0 bg-gray-900/10 flex items-center justify-center pointer-events-none">
@@ -329,13 +337,25 @@ export const ProductCatalog: React.FC = () => {
                         </div>
                     </div>
                     
-                    <div className="bg-gray-100 p-4 rounded-xl flex items-center justify-between cursor-pointer hover:bg-gray-200 transition-colors" onClick={() => setEditing({...editing, isActive: !editing.isActive})}>
-                        <div>
-                            <span className="block text-sm font-extrabold text-gray-900 uppercase">Availability Status</span>
-                            <span className="text-xs text-gray-500 font-medium">{editing.isActive ? 'Product is visible in Sales Terminal' : 'Product is HIDDEN from Sales Terminal'}</span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-gray-100 p-4 rounded-xl flex items-center justify-between cursor-pointer hover:bg-gray-200 transition-colors" onClick={() => setEditing({...editing, isActive: !editing.isActive})}>
+                            <div>
+                                <span className="block text-sm font-extrabold text-gray-900 uppercase">Availability Status</span>
+                                <span className="text-xs text-gray-500 font-medium leading-tight block mt-1">{editing.isActive ? 'Product is visible in Sales Terminal' : 'Product is HIDDEN entirely'}</span>
+                            </div>
+                            <div className={`w-14 h-7 flex items-center rounded-full p-1 duration-300 ease-in-out shrink-0 ${editing.isActive ? 'bg-green-500' : 'bg-gray-400'}`}>
+                                <div className={`bg-white w-5 h-5 rounded-full shadow-md transform duration-300 ease-in-out ${editing.isActive ? 'translate-x-7' : ''}`}></div>
+                            </div>
                         </div>
-                        <div className={`w-14 h-7 flex items-center rounded-full p-1 duration-300 ease-in-out ${editing.isActive ? 'bg-green-500' : 'bg-gray-400'}`}>
-                            <div className={`bg-white w-5 h-5 rounded-full shadow-md transform duration-300 ease-in-out ${editing.isActive ? 'translate-x-7' : ''}`}></div>
+
+                        <div className="bg-gray-100 p-4 rounded-xl flex items-center justify-between cursor-pointer hover:bg-gray-200 transition-colors" onClick={() => setEditing({...editing, sellOnline: editing.sellOnline !== false ? false : true})}>
+                            <div>
+                                <span className="block text-sm font-extrabold text-gray-900 uppercase">Storefront Status</span>
+                                <span className="text-xs text-gray-500 font-medium leading-tight block mt-1">{editing.sellOnline !== false ? 'Customer can buy this online' : 'POS ONLY (Hidden online)'}</span>
+                            </div>
+                            <div className={`w-14 h-7 flex items-center rounded-full p-1 duration-300 ease-in-out shrink-0 ${editing.sellOnline !== false ? 'bg-blue-500' : 'bg-gray-400'}`}>
+                                <div className={`bg-white w-5 h-5 rounded-full shadow-md transform duration-300 ease-in-out ${editing.sellOnline !== false ? 'translate-x-7' : ''}`}></div>
+                            </div>
                         </div>
                     </div>
                 </div>
