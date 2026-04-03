@@ -1,12 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import Papa from 'papaparse';
-import { deleteVoucher, updateVoucher, bulkDeleteVouchers, bulkExpireVouchers, fetchVouchers } from '../services/voucherService';
+import { deleteVoucher, updateVoucher, bulkDeleteVouchers, bulkExpireVouchers, fetchVouchers, fetchVoucherGroup, fetchSettings } from '../services/voucherService';
 import { useAppData } from '../context/AppDataContext';
-import { Voucher, VoucherStatus } from '../types';
+import { Voucher, VoucherStatus, SystemSettings } from '../types';
 import {
   Edit2, Trash2, Download, User, FileText, Activity, Calendar,
   Image as ImageIcon, ChevronLeft, ChevronRight, BarChart2, ShoppingBag,
-  Users, CreditCard, TrendingUp, X, CheckSquare, Square, FileSpreadsheet
+  Users, CreditCard, TrendingUp, X, CheckSquare, Square, FileSpreadsheet,
+  Printer, Mail, Send, RefreshCcw
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
@@ -80,6 +81,15 @@ export const Reports: React.FC = () => {
   // Edit State
   const [editVoucher, setEditVoucher] = useState<Voucher | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  // Receipt / Reprint / Resend state
+  const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const [receiptGroup, setReceiptGroup] = useState<Voucher[]>([]);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [loadingReceipt, setLoadingReceipt] = useState(false);
+  const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+
+  useEffect(() => { fetchSettings().then(setSettings); }, []);
 
   // Reset page when filters change
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -208,6 +218,97 @@ export const Reports: React.FC = () => {
   };
 
   const openEdit = (v: Voucher) => { setEditVoucher({ ...v }); setIsEditModalOpen(true); };
+
+  // --- Receipt helpers ---
+  const handleOpenReceipt = async (v: Voucher) => {
+    setLoadingReceipt(true);
+    setResendStatus('idle');
+    try {
+      const group = await fetchVoucherGroup(v);
+      setReceiptGroup(group);
+      setShowReceiptModal(true);
+    } catch (e) {
+      alert('Could not load receipt. Please try again.');
+    } finally {
+      setLoadingReceipt(false);
+    }
+  };
+
+  const generateEmailBody = (vouchers: Voucher[]): string => {
+    const appUrl = settings?.chipin?.appUrl || 'https://vms.gptt.my';
+    const biz = settings?.receipt?.businessName || 'Gopeng Glamping Park';
+    const primary = settings?.voucherPage?.primaryColor || '#0d9488';
+    const vp = settings?.voucherPage;
+    const voucherItems = vouchers.map(v => {
+      const expiryFormatted = v.dates?.expiryDate
+        ? new Date(v.dates.expiryDate).toLocaleDateString('en-MY', { day: 'numeric', month: 'long', year: 'numeric' })
+        : 'N/A';
+      const voucherUrl = `${appUrl}/voucher/${v.voucherCode}`;
+      return `
+        <div style="background:#f9fafb; border:1px solid #e5e7eb; border-radius:10px; padding:16px; margin:8px 0;">
+          <p style="margin:0 0 4px; font-weight:700; font-size:15px; color:#111827;">${v.voucherDetails.name}</p>
+          <p style="margin:0 0 4px; font-size:13px; color:#374151;">Value: <strong>RM${v.voucherDetails.value.toFixed(2)}</strong></p>
+          <p style="margin:0 0 4px; font-size:13px; color:#374151;">Code: <strong style="font-family:monospace; letter-spacing:2px;">${v.voucherCode}</strong></p>
+          <p style="margin:0 0 8px; font-size:13px; color:#dc2626; font-weight:700;">⚠️ Valid Until: ${expiryFormatted}</p>
+          <a href="${voucherUrl}" style="background:${primary}; color:white; text-decoration:none; padding:8px 16px; border-radius:6px; font-size:13px; font-weight:700; display:inline-block;">View E-Voucher →</a>
+        </div>
+      `;
+    }).join('');
+    return `
+      <div style="font-family:Arial,sans-serif; max-width:600px; margin:auto; background:#f9f9f9; border-radius:12px; overflow:hidden;">
+        <div style="background:${primary}; padding:28px 24px; text-align:center;">
+          ${vp?.logoUrl ? `<img src="${vp.logoUrl}" alt="${biz}" style="max-height:50px; margin-bottom:10px;" />` : ''}
+          <h1 style="color:white; margin:0; font-size:20px;">🎫 Your E-Voucher is Ready!</h1>
+          <p style="color:rgba(255,255,255,0.8); margin:6px 0 0;">${biz}</p>
+        </div>
+        <div style="padding:28px 24px; background:white;">
+          <p style="color:#374151;">Dear <strong>${vouchers[0]?.clientName}</strong>,</p>
+          <p style="color:#374151;">Here are your e-voucher(s). This is a resent copy for your records.</p>
+          ${voucherItems}
+          <p style="color:#374151; margin-top:16px;">You can also view all your vouchers at: <a href="${appUrl}/check" style="color:${primary};">${appUrl}/check</a></p>
+        </div>
+        <div style="background:#f3f4f6; padding:16px 24px; text-align:center;">
+          <p style="color:#6b7280; font-size:12px; margin:0;">${vp?.footerText || 'Non-refundable. Subject to availability.'}</p>
+        </div>
+      </div>
+    `;
+  };
+
+  const handleResendEmail = async () => {
+    if (!settings || !receiptGroup.length) return;
+    const email = receiptGroup[0]?.email;
+    if (!email) { alert('No email address on file for this client.'); return; }
+    setResendStatus('sending');
+    const body = generateEmailBody(receiptGroup);
+    const subject = `🎫 Your ${settings?.receipt?.businessName || 'GGP'} E-Voucher (Resent)`;
+    try {
+      if (settings.email.provider === 'SMTP' && settings.email.smtpHost) {
+        const res = await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: email, subject, html: body,
+            smtpHost: settings.email.smtpHost,
+            smtpPort: settings.email.smtpPort,
+            smtpUser: settings.email.smtpUser,
+            smtpPass: settings.email.smtpPass,
+            senderEmail: settings.email.senderEmail || settings.email.smtpUser,
+            senderName: settings.email.senderName || settings.receipt.businessName || 'GGP VMS'
+          }),
+        });
+        const data = await res.json();
+        if (data.success) setResendStatus('sent');
+        else throw new Error(data.error);
+      } else {
+        // Simulation mode — just succeed after 1.5s
+        await new Promise(r => setTimeout(r, 1500));
+        setResendStatus('sent');
+      }
+    } catch (e) {
+      console.error('Resend email failed:', e);
+      setResendStatus('error');
+    }
+  };
 
   // --- Bulk ops ---
   const toggleSelectAll = () => {
@@ -505,9 +606,20 @@ export const Reports: React.FC = () => {
                         </button>
                       </td>
                       <td className="px-4 py-3">
-                        <button onClick={() => openEdit(v)} className="text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 text-xs">
-                          <Edit2 size={13} /> Edit
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => openEdit(v)} className="text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 text-xs font-bold">
+                            <Edit2 size={13} /> Edit
+                          </button>
+                          <span className="text-gray-300">|</span>
+                          <button
+                            onClick={() => handleOpenReceipt(v)}
+                            disabled={loadingReceipt}
+                            className="text-teal-600 hover:text-teal-800 hover:underline flex items-center gap-1 text-xs font-bold disabled:opacity-40"
+                          >
+                            {loadingReceipt ? <RefreshCcw size={12} className="animate-spin" /> : <Printer size={12} />}
+                            Receipt
+                          </button>
+                        </div>
                       </td>
                       <td className="px-4 py-3 font-mono font-bold text-gray-700 text-xs">{v.voucherCode}</td>
                       <td className="px-4 py-3 font-medium text-gray-900">{v.clientName}</td>
@@ -959,6 +1071,142 @@ export const Reports: React.FC = () => {
                 <button onClick={() => setIsEditModalOpen(false)} className="px-6 py-2.5 text-gray-700 hover:bg-gray-200 rounded-lg font-bold transition-colors">Cancel</button>
                 <button onClick={handleSaveEdit} className="px-8 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 shadow-md font-bold transition-all active:scale-95">Save Changes</button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Receipt / Reprint / Resend Modal */}
+      {showReceiptModal && receiptGroup.length > 0 && settings && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden flex flex-col max-h-[92vh]">
+
+            {/* Header */}
+            <div className="p-4 bg-primary-600 text-white flex justify-between items-center">
+              <div>
+                <h3 className="font-bold text-base">Receipt Recovery</h3>
+                <p className="text-xs text-primary-200">Client: {receiptGroup[0].clientName} · {receiptGroup.length} voucher{receiptGroup.length > 1 ? 's' : ''}</p>
+              </div>
+              <button onClick={() => { setShowReceiptModal(false); setResendStatus('idle'); }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Resend status banner */}
+            {resendStatus === 'sending' && (
+              <div className="bg-blue-50 px-4 py-2 text-center text-xs font-bold text-blue-800 flex items-center justify-center gap-2">
+                <Mail size={12} className="animate-pulse" /> Sending email to {receiptGroup[0].email}...
+              </div>
+            )}
+            {resendStatus === 'sent' && (
+              <div className="bg-emerald-50 px-4 py-2 text-center text-xs font-bold text-emerald-800 flex items-center justify-center gap-2">
+                <Send size={12} /> ✅ Email sent successfully to {receiptGroup[0].email}
+              </div>
+            )}
+            {resendStatus === 'error' && (
+              <div className="bg-red-50 px-4 py-2 text-center text-xs font-bold text-red-700 flex items-center justify-center gap-2">
+                ❌ Email failed. Check SMTP settings in System Settings.
+              </div>
+            )}
+
+            {/* Thermal receipt area */}
+            <div
+              className={`p-6 overflow-y-auto bg-white font-mono text-sm print-only mx-auto ${
+                settings.receipt.printerWidth === '58mm' ? 'text-[10px]' : ''
+              }`}
+              id="receipt-area"
+              style={{ maxWidth: settings.receipt.printerWidth === '58mm' ? '58mm' : '80mm', width: '100%' }}
+            >
+              <div className="text-center mb-4">
+                <h2 className="text-xl font-bold text-black uppercase">{settings.receipt.businessName}</h2>
+                {settings.receipt.businessRegNo && <p className="text-[10px] text-gray-600">({settings.receipt.businessRegNo})</p>}
+                <p>{settings.receipt.addressLine1}</p>
+                <p>{settings.receipt.addressLine2}</p>
+                <p>Tel: {settings.receipt.phone}</p>
+                {settings.receipt.email && <p>Email: {settings.receipt.email}</p>}
+              </div>
+
+              <div className="border-b border-dashed border-gray-400 my-2"></div>
+              <p className="text-center text-xs italic mb-2">"{settings.receipt.headerMessage}"</p>
+
+              <div className="flex justify-between text-xs">
+                {receiptGroup[0].financials?.receiptNo && <span>RCPT: {receiptGroup[0].financials.receiptNo}</span>}
+                <span>{new Date(receiptGroup[0].dates.soldAt).toLocaleDateString()}</span>
+              </div>
+              <div className="text-xs mb-2">Client: {receiptGroup[0].clientName}</div>
+              {receiptGroup[0].email && <div className="text-xs mb-2 text-gray-500">Email: {receiptGroup[0].email}</div>}
+
+              <div className="border-b border-dashed border-gray-400 my-2"></div>
+
+              <div className="space-y-1">
+                {receiptGroup.map((item, idx) => (
+                  <div key={idx} className="flex justify-between">
+                    <span className="truncate w-32">{item.voucherDetails.name}</span>
+                    <span>RM{item.voucherDetails.value.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="border-b border-dashed border-gray-400 my-2"></div>
+              <div className="flex justify-between font-bold text-lg">
+                <span>TOTAL</span>
+                <span>RM{receiptGroup.reduce((acc, v) => acc + v.voucherDetails.value, 0).toFixed(2)}</span>
+              </div>
+
+              {receiptGroup[0].financials?.paymentMethod === 'Cash' && receiptGroup[0].financials?.cashReceived !== undefined && (
+                <div className="mt-2 text-xs">
+                  <div className="flex justify-between"><span>CASH REC</span><span>RM{receiptGroup[0].financials.cashReceived.toFixed(2)}</span></div>
+                  <div className="flex justify-between"><span>CHANGE</span><span>RM{receiptGroup[0].financials.changeAmount?.toFixed(2)}</span></div>
+                </div>
+              )}
+
+              <div className="text-right text-xs mt-2 font-bold uppercase">Paid via: {receiptGroup[0].financials?.paymentMethod || 'N/A'}</div>
+              {receiptGroup[0].workflow?.cashierName && (
+                <div className="text-right text-xs font-bold uppercase">Cashier: {receiptGroup[0].workflow.cashierName}</div>
+              )}
+
+              <div className="border-b border-dashed border-gray-400 my-4"></div>
+              <div className="text-center font-bold mb-2 uppercase text-xs">-- Voucher Entitlements --</div>
+
+              {receiptGroup.map((v, i) => (
+                <div key={v.id} className="mb-6 flex flex-col items-center">
+                  <p className="text-xs font-bold mb-1">{i + 1}. {v.voucherDetails.name}</p>
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent((settings?.chipin?.appUrl || 'https://vms.gptt.my') + '/voucher/' + v.voucherCode)}`}
+                    alt="Voucher QR"
+                    className="w-24 h-24 mb-1"
+                  />
+                  <p className="font-bold text-sm">{v.voucherCode}</p>
+                  <p className="text-[10px] text-gray-500">Exp: {v.dates.expiryDate.split('T')[0]}</p>
+                </div>
+              ))}
+
+              <div className="mt-4 text-center text-xs">
+                <p>{settings.receipt.footerMessage}</p>
+              </div>
+              <p className="text-center text-[9px] text-gray-400 mt-3 italic">** REPRINT **</p>
+            </div>
+
+            {/* Action buttons */}
+            <div className="p-4 border-t bg-gray-50 flex gap-2">
+              <button
+                onClick={() => window.print()}
+                className="flex-1 bg-gray-800 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-gray-900 transition-colors"
+              >
+                <Printer size={16} /> Reprint
+              </button>
+              <button
+                onClick={handleResendEmail}
+                disabled={resendStatus === 'sending' || resendStatus === 'sent'}
+                className="flex-1 bg-teal-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-teal-700 disabled:opacity-50 transition-colors"
+              >
+                {resendStatus === 'sending' ? (
+                  <><RefreshCcw size={14} className="animate-spin" /> Sending...</>
+                ) : resendStatus === 'sent' ? (
+                  <>✅ Sent!</>
+                ) : (
+                  <><Mail size={16} /> Resend Email</>
+                )}
+              </button>
             </div>
           </div>
         </div>

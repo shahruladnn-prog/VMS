@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { subscribeToPendingVouchers, updateVoucher, deleteVoucher, getCurrentUser, fetchSettings, fetchTemplates, createBatchVouchers, generateVoucherCode } from '../services/voucherService';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { subscribeToPendingVouchers, fetchPendingVouchers, updateVoucher, deleteVoucher, getCurrentUser, fetchSettings, fetchTemplates, createBatchVouchers, generateVoucherCode } from '../services/voucherService';
 import { Voucher, VoucherStatus, SystemSettings, VoucherTemplate } from '../types';
 import {
   Printer, CreditCard, Smartphone, DollarSign, RefreshCcw, X, Image as ImageIcon,
-  CheckSquare, Square, User, ShoppingBag, ArrowRight, Mail, Trash2, AlertTriangle, Send
+  CheckSquare, Square, User, ShoppingBag, ArrowRight, Mail, Trash2, AlertTriangle, Send,
+  Wifi, WifiOff
 } from 'lucide-react';
 
 export const CashierMode: React.FC = () => {
@@ -32,22 +33,62 @@ export const CashierMode: React.FC = () => {
   const [emailStatus, setEmailStatus] = useState('');
   const [chipinStatus, setChipinStatus] = useState('');
 
+  // Sync state
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
+
   // Delete confirm modal
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [clearConfirm, setClearConfirm] = useState(false);
+
+  // Force Sync — bypasses the WebSocket listener with a direct database read.
+  // Designed for congested event networks where the listener silently stalls.
+  const handleForceSync = useCallback(async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    try {
+      const fresh = await fetchPendingVouchers();
+      setPending(fresh);
+      setLastSyncedAt(new Date());
+    } catch (e) {
+      console.error('Force sync failed:', e);
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [isSyncing]);
 
   useEffect(() => {
     fetchSettings().then(setSettings);
     fetchTemplates(true).then(setTemplates);
     
-    // Subscribe to pending vouchers efficiently (costs exactly 1 read per new order, eliminating 279K polling drain)
+    // Subscribe to pending vouchers efficiently (costs exactly 1 read per new order)
     const unsubscribe = subscribeToPendingVouchers((newPendingVouchers) => {
       setPending(
         newPendingVouchers.sort((a, b) => new Date(b.dates.soldAt).getTime() - new Date(a.dates.soldAt).getTime())
       );
+      setLastSyncedAt(new Date());
     });
 
-    return () => unsubscribe();
+    // Network resilience: detect online/offline and auto-heal when connection returns
+    const handleOnline = () => {
+      setIsOnline(true);
+      // Silently trigger a force sync when network recovers so the queue heals itself
+      fetchPendingVouchers().then(fresh => {
+        setPending(fresh);
+        setLastSyncedAt(new Date());
+      }).catch(() => {});
+    };
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   // Group pending vouchers by Client Name
@@ -305,7 +346,35 @@ export const CashierMode: React.FC = () => {
             <h2 className="font-bold text-gray-800 text-lg">Queue ({pending.length})</h2>
             <p className="text-xs text-gray-500">Select items to combine payment</p>
           </div>
-          <div className="flex gap-1">
+          <div className="flex items-center gap-1.5">
+            {/* Network status pill */}
+            <span className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold border ${
+              isSyncing
+                ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                : isOnline
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'bg-red-50 text-red-700 border-red-200'
+            }`}>
+              {isSyncing ? (
+                <RefreshCcw size={10} className="animate-spin" />
+              ) : isOnline ? (
+                <Wifi size={10} />
+              ) : (
+                <WifiOff size={10} />
+              )}
+              {isSyncing ? 'Syncing...' : isOnline ? 'Live' : 'Offline'}
+            </span>
+
+            {/* Force Sync button */}
+            <button
+              onClick={handleForceSync}
+              disabled={isSyncing}
+              title={lastSyncedAt ? `Last synced: ${lastSyncedAt.toLocaleTimeString()}` : 'Force sync queue'}
+              className="p-2 hover:bg-primary-50 text-primary-600 hover:text-primary-800 disabled:opacity-40 rounded-full transition-colors"
+            >
+              <RefreshCcw size={15} className={isSyncing ? 'animate-spin' : ''} />
+            </button>
+
             {pending.length > 0 && (
               <button
                 onClick={() => setClearConfirm(true)}

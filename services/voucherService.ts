@@ -365,6 +365,52 @@ export const subscribeToPendingVouchers = (callback: (vouchers: Voucher[]) => vo
     });
 };
 
+// Direct one-shot fetch for Force Sync — bypasses the WebSocket listener entirely.
+// Safe to call on congested networks where the onSnapshot stream has stalled.
+export const fetchPendingVouchers = async (): Promise<Voucher[]> => {
+    const q = query(
+        collection(db, VOUCHERS_COL),
+        where('status', '==', VoucherStatus.PENDING_PAYMENT)
+    );
+    const snapshot = await getDocs(q);
+    const vouchers: Voucher[] = [];
+    snapshot.forEach((doc) => vouchers.push(doc.data() as Voucher));
+    return vouchers.sort((a, b) => new Date(b.dates.soldAt).getTime() - new Date(a.dates.soldAt).getTime());
+};
+
+// Fetches all vouchers belonging to the same transaction as the given voucher.
+// Groups by receiptNo (POS), chipinPurchaseId (Online/Agent), or falls back to the single voucher.
+export const fetchVoucherGroup = async (voucher: Voucher): Promise<Voucher[]> => {
+    // Try to group by POS receipt number first
+    if (voucher.financials?.receiptNo) {
+        const q = query(
+            collection(db, VOUCHERS_COL),
+            where('financials.receiptNo', '==', voucher.financials.receiptNo)
+        );
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+            const group: Voucher[] = [];
+            snapshot.forEach(d => group.push(d.data() as Voucher));
+            return group;
+        }
+    }
+    // Try to group by online/agent purchase ID
+    if (voucher.chipinPurchaseId) {
+        const q = query(
+            collection(db, VOUCHERS_COL),
+            where('chipinPurchaseId', '==', voucher.chipinPurchaseId)
+        );
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+            const group: Voucher[] = [];
+            snapshot.forEach(d => group.push(d.data() as Voucher));
+            return group;
+        }
+    }
+    // Fallback: just the single voucher
+    return [voucher];
+};
+
 export const createVoucher = async (voucher: Voucher): Promise<void> => {
     await setDoc(doc(db, VOUCHERS_COL, voucher.id), voucher);
 };
