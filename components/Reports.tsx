@@ -87,7 +87,7 @@ export const Reports: React.FC = () => {
   const [receiptGroup, setReceiptGroup] = useState<Voucher[]>([]);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [loadingReceipt, setLoadingReceipt] = useState(false);
-  const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'sent' | string>('idle');
 
   useEffect(() => { fetchSettings().then(setSettings); }, []);
 
@@ -304,9 +304,9 @@ export const Reports: React.FC = () => {
         await new Promise(r => setTimeout(r, 1500));
         setResendStatus('sent');
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('Resend email failed:', e);
-      setResendStatus('error');
+      setResendStatus(e.message || 'Unknown network error');
     }
   };
 
@@ -1102,9 +1102,9 @@ export const Reports: React.FC = () => {
                 <Send size={12} /> ✅ Email sent successfully to {receiptGroup[0].email}
               </div>
             )}
-            {resendStatus === 'error' && (
+            {resendStatus !== 'idle' && resendStatus !== 'sending' && resendStatus !== 'sent' && (
               <div className="bg-red-50 px-4 py-2 text-center text-xs font-bold text-red-700 flex items-center justify-center gap-2">
-                ❌ Email failed. Check SMTP settings in System Settings.
+                ❌ {resendStatus}
               </div>
             )}
 
