@@ -149,7 +149,12 @@ export const Reports: React.FC = () => {
   const salesByEmployee = useMemo(() => {
     const map: Record<string, { count: number; revenue: number }> = {};
     paidData.forEach(v => {
-      const name = v.workflow.salesPersonName || 'Unknown';
+      let name = v.workflow?.salesPersonName;
+      if (!name) {
+          if (v.saleChannel === 'Online') name = 'System (Online Store)';
+          else if (v.saleChannel === 'Agent' || v.isAgentOrder) name = 'System (Agent Portal)';
+          else name = 'Unknown Staff';
+      }
       if (!map[name]) map[name] = { count: 0, revenue: 0 };
       map[name].count++;
       map[name].revenue += v.voucherDetails.value;

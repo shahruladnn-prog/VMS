@@ -360,7 +360,10 @@ export const subscribeToPendingVouchers = (callback: (vouchers: Voucher[]) => vo
     );
     return onSnapshot(q, (snapshot) => {
         const vouchers: Voucher[] = [];
-        snapshot.forEach((doc) => vouchers.push(doc.data() as Voucher));
+        snapshot.forEach((doc) => {
+            const v = doc.data() as Voucher;
+            if (!v.saleChannel || v.saleChannel === 'POS') vouchers.push(v);
+        });
         callback(vouchers);
     });
 };
@@ -374,7 +377,10 @@ export const fetchPendingVouchers = async (): Promise<Voucher[]> => {
     );
     const snapshot = await getDocs(q);
     const vouchers: Voucher[] = [];
-    snapshot.forEach((doc) => vouchers.push(doc.data() as Voucher));
+    snapshot.forEach((doc) => {
+        const v = doc.data() as Voucher;
+        if (!v.saleChannel || v.saleChannel === 'POS') vouchers.push(v);
+    });
     return vouchers.sort((a, b) => new Date(b.dates.soldAt).getTime() - new Date(a.dates.soldAt).getTime());
 };
 
