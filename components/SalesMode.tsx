@@ -20,10 +20,9 @@ export const SalesMode: React.FC = () => {
   const currentUser = getCurrentUser();
   
   // Client Info State
-  const [clientInfo, setClientInfo] = useState({
-    name: '',
-    phone: '',
-    email: ''
+  const [clientInfo, setClientInfo] = useState(() => {
+    const saved = localStorage.getItem('vms_sales_client');
+    return saved ? JSON.parse(saved) : { name: '', phone: '', email: '' };
   });
 
   // Product Selection State
@@ -32,8 +31,21 @@ export const SalesMode: React.FC = () => {
   const [currentQuantity, setCurrentQuantity] = useState<number>(1);
   
   // Cart State
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    const saved = localStorage.getItem('vms_sales_cart');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [feedback, setFeedback] = useState<{type: 'success'|'error', msg: string} | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Sync to local storage
+  useEffect(() => {
+    localStorage.setItem('vms_sales_cart', JSON.stringify(cart));
+  }, [cart]);
+
+  useEffect(() => {
+    localStorage.setItem('vms_sales_client', JSON.stringify(clientInfo));
+  }, [clientInfo]);
 
   // Initial Load
   useEffect(() => {
@@ -101,6 +113,8 @@ export const SalesMode: React.FC = () => {
         setFeedback({ type: 'error', msg: 'Client Name and Phone are required.' });
         return;
     }
+    
+    setIsSubmitting(true);
 
     try {
         const vouchersToCreate: Voucher[] = [];
@@ -150,6 +164,8 @@ export const SalesMode: React.FC = () => {
 
     } catch (e) {
         setFeedback({ type: 'error', msg: 'Failed to process order.' });
+    } finally {
+        setIsSubmitting(false);
     }
   };
 
@@ -308,11 +324,11 @@ export const SalesMode: React.FC = () => {
                 </div>
                 <button 
                     onClick={handleBatchSubmit}
-                    disabled={cart.length === 0}
+                    disabled={cart.length === 0 || isSubmitting}
                     className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-5 rounded-xl text-xl shadow-lg hover:shadow-xl transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
                 >
                     <CheckCircle size={28} />
-                    SUBMIT TO CASHIER
+                    {isSubmitting ? 'SUBMITTING...' : 'SUBMIT TO CASHIER'}
                 </button>
             </div>
         </div>

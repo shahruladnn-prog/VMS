@@ -2,7 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, collection, getDocs, doc, setDoc, deleteDoc, 
   query, where, updateDoc, addDoc, onSnapshot, orderBy, limit,
-  getCountFromServer, getAggregateFromServer, sum
+  getCountFromServer, getAggregateFromServer, sum, writeBatch
 } from 'firebase/firestore';
 import { Voucher, VoucherStatus, VoucherTemplate, User, UserRole, SystemSettings, PromoCode, AuditLogEntry } from '../types';
 
@@ -370,7 +370,15 @@ export const createVoucher = async (voucher: Voucher): Promise<void> => {
 };
 
 export const createBatchVouchers = async (vouchers: Voucher[]): Promise<void> => {
-    await Promise.all(vouchers.map(v => setDoc(doc(db, VOUCHERS_COL, v.id), v)));
+    // Firestore batch limit is 500
+    for (let i = 0; i < vouchers.length; i += 500) {
+        const chunk = vouchers.slice(i, i + 500);
+        const batch = writeBatch(db);
+        chunk.forEach(v => {
+            batch.set(doc(db, VOUCHERS_COL, v.id), v);
+        });
+        await batch.commit();
+    }
 };
 
 // Fetch all vouchers purchased through the Agent Portal by a specific agent

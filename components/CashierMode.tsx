@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { subscribeToPendingVouchers, updateVoucher, deleteVoucher, getCurrentUser, fetchSettings } from '../services/voucherService';
-import { Voucher, VoucherStatus, SystemSettings } from '../types';
+import { subscribeToPendingVouchers, updateVoucher, deleteVoucher, getCurrentUser, fetchSettings, fetchTemplates, createBatchVouchers, generateVoucherCode } from '../services/voucherService';
+import { Voucher, VoucherStatus, SystemSettings, VoucherTemplate } from '../types';
 import {
   Printer, CreditCard, Smartphone, DollarSign, RefreshCcw, X, Image as ImageIcon,
   CheckSquare, Square, User, ShoppingBag, ArrowRight, Mail, Trash2, AlertTriangle, Send
@@ -12,6 +12,11 @@ export const CashierMode: React.FC = () => {
   const [processing, setProcessing] = useState(false);
   const currentUser = getCurrentUser();
   const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const [templates, setTemplates] = useState<VoucherTemplate[]>([]);
+
+  // Add Item State
+  const [addingForClient, setAddingForClient] = useState<string | null>(null);
+  const [isSubmittingItem, setIsSubmittingItem] = useState(false);
 
   // Payment Flow State
   const [confirmingMethod, setConfirmingMethod] = useState<'Cash' | 'QR' | 'Terminal' | null>(null);
@@ -33,6 +38,7 @@ export const CashierMode: React.FC = () => {
 
   useEffect(() => {
     fetchSettings().then(setSettings);
+    fetchTemplates(true).then(setTemplates);
     
     // Subscribe to pending vouchers efficiently (costs exactly 1 read per new order, eliminating 279K polling drain)
     const unsubscribe = subscribeToPendingVouchers((newPendingVouchers) => {
@@ -102,6 +108,44 @@ export const CashierMode: React.FC = () => {
     await Promise.all(pending.map(v => deleteVoucher(v.id)));
     setClearConfirm(false);
     setSelectedIds(new Set());
+  };
+
+  const handleQuickAddFromCashier = async (template: VoucherTemplate) => {
+    if (!addingForClient) return;
+    setIsSubmittingItem(true);
+    try {
+      const existing = groupedQueue[addingForClient]?.[0];
+      const defaultExpiry = template.defaultExpiryDate 
+        ? new Date(template.defaultExpiryDate).toISOString() 
+        : new Date(new Date().setFullYear(new Date().getFullYear() + 2)).toISOString();
+
+      const newVoucher: Voucher = {
+          id: crypto.randomUUID(),
+          voucherCode: generateVoucherCode(),
+          clientName: addingForClient,
+          phoneNumber: existing?.phoneNumber || 'N/A',
+          email: existing?.email || '',
+          voucherDetails: {
+              name: template.name,
+              category: template.category,
+              value: template.value,
+              terms: template.terms || 'Standard terms apply.',
+              image: template.image
+          },
+          eventSource: 'Sales Desk',
+          status: VoucherStatus.PENDING_PAYMENT,
+          workflow: { salesPersonName: existing?.workflow?.salesPersonName || currentUser?.fullName || 'Unknown' },
+          dates: { soldAt: new Date().toISOString(), expiryDate: defaultExpiry },
+          financials: {}, redemption: {}
+      };
+      
+      await createBatchVouchers([newVoucher]);
+      setAddingForClient(null);
+    } catch (e) {
+      alert("Failed to add item. Please try again.");
+    } finally {
+      setIsSubmittingItem(false);
+    }
   };
 
   // --- Email Helpers ---
@@ -288,6 +332,12 @@ export const CashierMode: React.FC = () => {
                 <div className="flex items-center gap-2 font-bold text-gray-700">
                   <User size={16} /> {client}{' '}
                   <span className="text-xs bg-gray-200 px-2 rounded-full">{vouchers.length}</span>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setAddingForClient(client); }}
+                    className="ml-2 text-primary-600 bg-primary-50 border border-primary-200 px-2 py-0.5 rounded text-[10px] uppercase tracking-wider font-extrabold hover:bg-primary-100 hover:border-primary-300 transition-all active:scale-95"
+                  >
+                    + Add Item
+                  </button>
                 </div>
                 {vouchers.every(v => selectedIds.has(v.id))
                   ? <CheckSquare size={18} className="text-primary-600" />
@@ -448,6 +498,45 @@ export const CashierMode: React.FC = () => {
               <button onClick={() => setClearConfirm(false)} className="flex-1 py-3 text-gray-700 font-bold bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors">Cancel</button>
               <button onClick={handleClearAllQueue} className="flex-1 py-3 text-white font-bold bg-red-600 hover:bg-red-700 rounded-xl transition-colors">Clear All</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Item Modal */}
+      {addingForClient && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full p-6 relative flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
+                <div>
+                   <h3 className="text-2xl font-extrabold text-gray-900">Add Item to Order</h3>
+                   <p className="text-gray-500 font-medium">Adding for client: <span className="text-primary-600 font-bold">{addingForClient}</span></p>
+                </div>
+                <button onClick={() => setAddingForClient(null)} className="p-2 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors text-gray-500 hover:text-gray-900"><X size={20}/></button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto mb-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-1">
+                {templates.map(t => (
+                    <div key={t.id} onClick={() => handleQuickAddFromCashier(t)} 
+                        className={`bg-gray-50 border-2 border-transparent hover:border-primary-500 rounded-xl overflow-hidden cursor-pointer shadow-sm hover:shadow-md transition-all active:scale-95 group flex flex-col h-full min-h-[140px] ${isSubmittingItem ? 'opacity-50 pointer-events-none' : ''}`}>
+                         {t.image ? (
+                             <img src={t.image} alt={t.name} className="w-full h-24 object-cover border-b border-gray-100" />
+                         ) : (
+                             <div className="w-full h-24 bg-gradient-to-br from-primary-700 to-primary-500 flex items-center justify-center text-white/40 border-b border-white/10">
+                                 <ShoppingBag size={28}/>
+                             </div>
+                         )}
+                         <div className="p-3 flex-1 flex flex-col">
+                             <h4 className="font-extrabold text-gray-900 text-xs leading-tight mb-1 group-hover:text-primary-700 transition-colors line-clamp-2">{t.name}</h4>
+                             <div className="mt-auto text-primary-600 font-extrabold text-sm flex justify-between items-end">
+                                 <span>RM{t.value}</span>
+                             </div>
+                         </div>
+                    </div>
+                ))}
+            </div>
+            
+            {isSubmittingItem && <div className="p-4 text-center text-primary-700 font-bold text-lg bg-primary-50 rounded-xl animate-pulse flex items-center justify-center gap-2"><RefreshCcw className="animate-spin" size={20}/> Adding Item to Queue...</div>}
+            {!isSubmittingItem && <div className="text-center text-gray-400 text-sm font-bold tracking-wider uppercase mt-2">Click an item to instantly add to queue</div>}
           </div>
         </div>
       )}
