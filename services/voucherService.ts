@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { 
-  getFirestore, collection, getDocs, doc, setDoc, deleteDoc, 
+  getFirestore, initializeFirestore, persistentLocalCache, collection, getDocs, doc, setDoc, deleteDoc, 
   query, where, updateDoc, addDoc, onSnapshot, orderBy, limit,
   getCountFromServer, getAggregateFromServer, sum, writeBatch
 } from 'firebase/firestore';
@@ -18,7 +18,9 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+const db = initializeFirestore(app, {
+  localCache: persistentLocalCache()
+});
 
 // Collection References
 const VOUCHERS_COL = 'vouchers';
@@ -131,7 +133,6 @@ export const login = async (username: string, password: string): Promise<User> =
     let users = remoteUsers;
     if (remoteUsers.length === 0) {
         users = SEED_USERS;
-        Promise.all(SEED_USERS.map(u => setDoc(doc(db, USERS_COL, u.username), u)));
     }
 
     const hashedInput = await hashPassword(password);
@@ -225,7 +226,6 @@ export const fetchUsers = async (): Promise<User[]> => {
     snapshot.forEach((doc) => users.push(doc.data() as User));
     
     if (users.length === 0) {
-        await Promise.all(SEED_USERS.map(u => setDoc(doc(db, USERS_COL, u.username), u)));
         return SEED_USERS;
     }
     return users;
@@ -585,7 +585,7 @@ export const fetchSettings = async (): Promise<SystemSettings> => {
     const settingsDoc = snapshot.docs.find(d => d.id === 'global');
     if (settingsDoc) return settingsDoc.data() as SystemSettings;
     
-    await setDoc(doc(db, SETTINGS_COL, 'global'), DEFAULT_SETTINGS);
+    // In memory fallback only, avoid database overwrite on cache miss
     return DEFAULT_SETTINGS;
 };
 

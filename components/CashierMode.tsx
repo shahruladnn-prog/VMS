@@ -477,7 +477,14 @@ export const CashierMode: React.FC = () => {
                     )}
                     <div className="flex-1">
                       <h4 className="font-bold text-gray-800 text-sm">{v.voucherDetails.name}</h4>
-                      <p className="text-xs text-gray-500">{v.clientName} - {v.voucherDetails.category}</p>
+                      <p className="text-xs text-gray-500">
+                        {v.clientName} - {v.voucherDetails.category}
+                        {v.workflow?.salesPersonName && (
+                          <span className="ml-2 px-1.5 py-0.5 bg-gray-200 text-gray-700 rounded text-[10px] font-bold">
+                            Keyed by: {v.workflow.salesPersonName}
+                          </span>
+                        )}
+                      </p>
                     </div>
                     <div className="font-mono text-sm text-gray-600 mr-4">{v.voucherCode}</div>
                     <div className="font-bold text-gray-900">RM{v.voucherDetails.value}</div>

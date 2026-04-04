@@ -48,7 +48,7 @@ export default async function handler(req, res) {
     if (!v.email) return res.status(400).json({ error: 'No client email on this voucher' });
 
     // Fetch settings for SMTP config and branding
-    const settingsSnap = await db.collection('settings').doc('main').get();
+    const settingsSnap = await db.collection('settings').doc('global').get();
     const settings = settingsSnap.exists ? settingsSnap.data() : {};
     const es = settings?.email;
 
