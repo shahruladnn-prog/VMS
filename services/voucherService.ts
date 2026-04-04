@@ -602,3 +602,62 @@ export const fetchVoucherByCode = async (code: string): Promise<Voucher | null> 
     if (snapshot.empty) return null;
     return snapshot.docs[0].data() as Voucher;
 };
+
+// Fetch all vouchers for a given phone number (client-side Active filter to avoid composite index).
+// Normalises +601X -> 01X and vice versa so format mismatches don't cause missed results.
+export const fetchVouchersByPhone = async (rawPhone: string): Promise<Voucher[]> => {
+    const normalised = rawPhone.trim().replace(/^\+60/, '0').replace(/\s|-/g, '');
+    const q = query(collection(db, VOUCHERS_COL), where('phoneNumber', '==', normalised));
+    const snapshot = await getDocs(q);
+    const vouchers: Voucher[] = [];
+    snapshot.forEach(d => vouchers.push(d.data() as Voucher));
+    return vouchers.sort((a, b) => new Date(b.dates.soldAt).getTime() - new Date(a.dates.soldAt).getTime());
+};
+
+// Atomically redeem multiple vouchers in a single Firestore batch.
+// Re-validates each voucher status before writing — skips already-redeemed or expired ones.
+// Returns an object: { redeemed: string[], skipped: string[] } with voucher codes.
+export const bulkRedeemVouchers = async (
+    vouchers: Voucher[],
+    branch: string,
+    picName: string,
+    bookingDate: string
+): Promise<{ redeemed: string[]; skipped: string[] }> => {
+    const redeemed: string[] = [];
+    const skipped: string[] = [];
+
+    // Re-validate each voucher from DB to guard against race conditions
+    const validated: Voucher[] = [];
+    for (const v of vouchers) {
+        const fresh = await fetchVoucherByCode(v.voucherCode);
+        if (fresh && fresh.status === VoucherStatus.ACTIVE) {
+            validated.push(fresh);
+        } else {
+            skipped.push(v.voucherCode);
+        }
+    }
+
+    if (validated.length === 0) return { redeemed, skipped };
+
+    const batch = writeBatch(db);
+    const now = new Date().toISOString();
+    validated.forEach(v => {
+        const updated: Voucher = {
+            ...v,
+            status: VoucherStatus.REDEEMED,
+            dates: { ...v.dates, redemptionDate: now, bookingDate: bookingDate || undefined },
+            redemption: { branchName: branch },
+            workflow: { ...v.workflow, redemptionPicName: picName }
+        };
+        batch.update(doc(db, VOUCHERS_COL, v.id), { ...updated });
+        redeemed.push(v.voucherCode);
+    });
+    await batch.commit();
+
+    await logAuditEvent(
+        'BULK_REDEEM',
+        `Bulk redeemed ${redeemed.length} voucher(s) at ${branch}: ${redeemed.join(', ')}${skipped.length ? ` | Skipped (not active): ${skipped.join(', ')}` : ''}`
+    );
+
+    return { redeemed, skipped };
+};

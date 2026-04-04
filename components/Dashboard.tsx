@@ -52,13 +52,14 @@ export const Dashboard: React.FC = () => {
   }, [vouchers, overviewDateRange, overviewCategory]);
 
   const dashboardStats = useMemo(() => {
-    const activeVouchers = dashboardData.filter(v => v.status !== VoucherStatus.PENDING_PAYMENT);
+    const activeVouchers = dashboardData.filter(v => v.status !== VoucherStatus.PENDING_PAYMENT && !v.isComplimentary);
     const totalRevenue = activeVouchers.reduce((sum, v) => sum + v.voucherDetails.value, 0);
     const totalSold = activeVouchers.length;
     const redeemedCount = activeVouchers.filter(v => v.status === VoucherStatus.REDEEMED).length;
     const redemptionRate = totalSold > 0 ? (redeemedCount / totalSold) * 100 : 0;
     const pendingCount = dashboardData.filter(v => v.status === VoucherStatus.PENDING_PAYMENT).length;
-    return { totalRevenue, totalSold, redeemedCount, redemptionRate, pendingCount };
+    const complimentaryCount = dashboardData.filter(v => v.isComplimentary).length;
+    return { totalRevenue, totalSold, redeemedCount, redemptionRate, pendingCount, complimentaryCount };
   }, [dashboardData]);
 
   // Chart Data: Status Distribution
@@ -142,11 +143,11 @@ export const Dashboard: React.FC = () => {
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5 mb-8">
-              <StatCard title="Revenue (Selection)" value={`RM${dashboardStats.totalRevenue.toLocaleString()}`} color="bg-emerald-600" />
-              <StatCard title="Sold (Selection)" value={dashboardStats.totalSold} color="bg-teal-600" />
+              <StatCard title="Revenue (Paid)" value={`RM${dashboardStats.totalRevenue.toLocaleString()}`} color="bg-emerald-600" />
+              <StatCard title="Sold (Paid)" value={dashboardStats.totalSold} color="bg-teal-600" />
               <StatCard title="Redeemed" value={dashboardStats.redeemedCount} color="bg-cyan-600" />
               <StatCard title="Redemption Rate" value={`${dashboardStats.redemptionRate.toFixed(1)}%`} color="bg-blue-600" />
-              <StatCard title="Pending Payment" value={dashboardStats.pendingCount} color="bg-amber-500" />
+              <StatCard title="Complimentary" value={`🎁 ${dashboardStats.complimentaryCount}`} color="bg-gray-600" />
           </div>
 
           {/* Charts */}

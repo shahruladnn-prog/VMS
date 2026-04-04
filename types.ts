@@ -80,7 +80,7 @@ export interface Voucher {
   };
   financials: {
     invoiceNo?: string;
-    paymentMethod?: 'QR' | 'Cash' | 'Terminal' | 'Online';
+    paymentMethod?: 'QR' | 'Cash' | 'Terminal' | 'Online' | 'Complimentary';
     receiptNo?: string;
     cashReceived?: number;
     changeAmount?: number;
@@ -98,6 +98,8 @@ export interface Voucher {
   agentName?: string;       // denormalised for email webhook (no extra DB read)
   agentEmail?: string;      // for BCC confirmation to agent
   clientMessage?: string;   // personal note from agent to client
+  // Complimentary voucher flag — excludes from all revenue calculations
+  isComplimentary?: boolean;
 
 }
 

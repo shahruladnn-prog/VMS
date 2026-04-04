@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { createBatchVouchers, generateVoucherCode, fetchTemplates, getCurrentUser } from '../services/voucherService';
-import { Voucher, VoucherStatus, VoucherTemplate } from '../types';
-import { PlusCircle, CheckCircle, AlertCircle, ShoppingCart, Trash2, Plus, Minus, Package, User } from 'lucide-react';
+import { createBatchVouchers, generateVoucherCode, fetchTemplates, getCurrentUser, logAuditEvent, fetchSettings } from '../services/voucherService';
+import { Voucher, VoucherStatus, VoucherTemplate, UserRole, SystemSettings } from '../types';
+import { PlusCircle, CheckCircle, AlertCircle, ShoppingCart, Trash2, Plus, Minus, Package, User, Gift } from 'lucide-react';
 
 interface CartItem {
   tempId: string;
@@ -37,6 +37,9 @@ export const SalesMode: React.FC = () => {
   });
   const [feedback, setFeedback] = useState<{type: 'success'|'error', msg: string} | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isComplimentaryMode, setIsComplimentaryMode] = useState(false);
+  const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const isAdmin = currentUser?.roles?.includes(UserRole.ADMIN) ?? false;
 
   // Sync to local storage
   useEffect(() => {
@@ -57,6 +60,7 @@ export const SalesMode: React.FC = () => {
         setCurrentPriceOverride(active[0].value);
       }
     });
+    fetchSettings().then(setSettings);
   }, []);
 
   // Update price when template changes
@@ -105,28 +109,18 @@ export const SalesMode: React.FC = () => {
   };
 
   const handleBatchSubmit = async () => {
-    if (cart.length === 0) {
-        setFeedback({ type: 'error', msg: 'Cart is empty.' });
-        return;
-    }
-    if (!clientInfo.name || !clientInfo.phone) {
-        setFeedback({ type: 'error', msg: 'Client Name and Phone are required.' });
-        return;
-    }
-    
+    if (cart.length === 0) { setFeedback({ type: 'error', msg: 'Cart is empty.' }); return; }
+    if (!clientInfo.name || !clientInfo.phone) { setFeedback({ type: 'error', msg: 'Client Name and Phone are required.' }); return; }
     setIsSubmitting(true);
-
     try {
         const vouchersToCreate: Voucher[] = [];
         const saleDate = new Date().toISOString();
+        const receiptNo = `RCPT-${Date.now().toString().slice(-6)}`;
 
         cart.forEach(item => {
-            // Use item default expiry or fallback to 2 years
-            const defaultExpiry = item.defaultExpiryDate 
-            ? new Date(item.defaultExpiryDate).toISOString() 
-            : new Date(new Date().setFullYear(new Date().getFullYear() + 2)).toISOString();
-
-            // Create X vouchers based on quantity
+            const defaultExpiry = item.defaultExpiryDate
+                ? new Date(item.defaultExpiryDate).toISOString()
+                : new Date(new Date().setFullYear(new Date().getFullYear() + 2)).toISOString();
             for (let i = 0; i < item.quantity; i++) {
                 vouchersToCreate.push({
                     id: crypto.randomUUID(),
@@ -142,28 +136,85 @@ export const SalesMode: React.FC = () => {
                         image: item.image
                     },
                     eventSource: 'Sales Desk',
-                    status: VoucherStatus.PENDING_PAYMENT,
+                    // Complimentary vouchers skip the queue and go straight to Active
+                    status: isComplimentaryMode ? VoucherStatus.ACTIVE : VoucherStatus.PENDING_PAYMENT,
+                    isComplimentary: isComplimentaryMode || undefined,
                     workflow: { salesPersonName: currentUser?.fullName || 'Unknown' },
                     dates: {
                         soldAt: saleDate,
-                        expiryDate: defaultExpiry
+                        expiryDate: defaultExpiry,
+                        ...(isComplimentaryMode ? { paidAt: saleDate } : {})
                     },
-                    financials: {},
-                    redemption: {}
+                    financials: isComplimentaryMode
+                        ? { paymentMethod: 'Complimentary', receiptNo }
+                        : {},
+                    redemption: {},
+                    saleChannel: 'POS',
                 });
             }
         });
 
         await createBatchVouchers(vouchersToCreate);
-        
-        setFeedback({ type: 'success', msg: `Successfully created ${vouchersToCreate.length} orders!` });
+
+        if (isComplimentaryMode) {
+            await logAuditEvent(
+                'ISSUE_COMPLIMENTARY',
+                `Issued ${vouchersToCreate.length} complimentary voucher(s) to ${clientInfo.name} (${clientInfo.phone}): ${vouchersToCreate.map(v => v.voucherCode).join(', ')}`,
+                vouchersToCreate[0]?.id
+            );
+            // Send email if email is on file and SMTP is configured
+            if (clientInfo.email && settings?.email?.provider === 'SMTP' && settings.email.smtpHost) {
+                const appUrl = settings?.chipin?.appUrl || 'https://vms.gptt.my';
+                const biz = settings?.receipt?.businessName || 'GGP';
+                const primary = settings?.voucherPage?.primaryColor || '#0d9488';
+                const voucherList = vouchersToCreate.map(v => {
+                    const exp = v.dates.expiryDate.split('T')[0];
+                    const url = `${appUrl}/voucher/${v.voucherCode}`;
+                    return `<div style="border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin:6px 0;">
+                        <p style="margin:0 0 4px;font-weight:700;">${v.voucherDetails.name}</p>
+                        <p style="margin:0 0 4px;font-size:13px;color:#374151;">Code: <strong style="font-family:monospace;letter-spacing:2px;">${v.voucherCode}</strong></p>
+                        <p style="margin:0 0 6px;font-size:13px;color:#dc2626;">⚠️ Valid Until: ${exp}</p>
+                        <a href="${url}" style="background:${primary};color:white;text-decoration:none;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:700;display:inline-block;">View Voucher →</a>
+                    </div>`;
+                }).join('');
+                const emailHtml = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;">
+                    <div style="background:${primary};padding:24px;text-align:center;border-radius:12px 12px 0 0;">
+                        <h1 style="color:white;margin:0;">🎁 Complimentary Voucher</h1>
+                        <p style="color:rgba(255,255,255,0.85);margin:6px 0 0;">${biz}</p>
+                    </div>
+                    <div style="background:white;padding:24px;">
+                        <p>Dear <strong>${clientInfo.name}</strong>,</p>
+                        <p>We are pleased to present you with the following complimentary voucher(s):</p>
+                        ${voucherList}
+                    </div>
+                </div>`;
+                fetch('/api/send-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        to: clientInfo.email,
+                        subject: `🎁 Your Complimentary Voucher from ${biz}`,
+                        html: emailHtml,
+                        smtpHost: settings.email.smtpHost,
+                        smtpPort: settings.email.smtpPort,
+                        smtpUser: settings.email.smtpUser,
+                        smtpPass: settings.email.smtpPass,
+                        senderEmail: settings.email.senderEmail || settings.email.smtpUser,
+                        senderName: settings.email.senderName || biz
+                    })
+                }).catch(e => console.warn('Complimentary email send failed:', e));
+            }
+            setFeedback({ type: 'success', msg: `🎁 ${vouchersToCreate.length} complimentary voucher(s) issued and activated!` });
+        } else {
+            setFeedback({ type: 'success', msg: `Successfully created ${vouchersToCreate.length} order(s)! Sent to Cashier Queue.` });
+        }
+
         setCart([]);
         setClientInfo({ name: '', phone: '', email: '' });
-        
-        setTimeout(() => setFeedback(null), 5000);
-
+        setIsComplimentaryMode(false);
+        setTimeout(() => setFeedback(null), 6000);
     } catch (e) {
-        setFeedback({ type: 'error', msg: 'Failed to process order.' });
+        setFeedback({ type: 'error', msg: 'Failed to process order. Please try again.' });
     } finally {
         setIsSubmitting(false);
     }
@@ -318,17 +369,36 @@ export const SalesMode: React.FC = () => {
             </div>
 
             <div className="p-6 bg-white border-t border-gray-200 z-10">
-                <div className="flex justify-between items-center mb-6">
+                {/* Complimentary Toggle — ADMIN only */}
+                {isAdmin && cart.length > 0 && (
+                    <button
+                        onClick={() => setIsComplimentaryMode(prev => !prev)}
+                        className={`w-full mb-3 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border-2 transition-all ${
+                            isComplimentaryMode
+                                ? 'bg-teal-50 border-teal-400 text-teal-700'
+                                : 'bg-gray-50 border-dashed border-gray-300 text-gray-500 hover:border-teal-300 hover:text-teal-600'
+                        }`}
+                    >
+                        <Gift size={16} />
+                        {isComplimentaryMode ? '🎁 COMPLIMENTARY MODE ON — No Charge' : 'Issue as Complimentary (Admin)'}
+                    </button>
+                )}
+                <div className={`flex justify-between items-center mb-6 p-3 rounded-xl ${isComplimentaryMode ? 'bg-teal-50' : ''}`}>
                     <span className="text-gray-500 font-bold uppercase text-sm">Total Amount</span>
-                    <span className="text-4xl font-extrabold text-gray-900 tracking-tight">${cartTotal.toFixed(2)}</span>
+                    {isComplimentaryMode
+                        ? <span className="text-2xl font-extrabold text-teal-600">RM 0.00 <span className="text-sm font-bold">(Complimentary)</span></span>
+                        : <span className="text-4xl font-extrabold text-gray-900 tracking-tight">RM{cartTotal.toFixed(2)}</span>
+                    }
                 </div>
                 <button 
                     onClick={handleBatchSubmit}
                     disabled={cart.length === 0 || isSubmitting}
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-5 rounded-xl text-xl shadow-lg hover:shadow-xl transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+                    className={`w-full text-white font-extrabold py-5 rounded-xl text-xl shadow-lg hover:shadow-xl transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 ${
+                        isComplimentaryMode ? 'bg-teal-600 hover:bg-teal-700' : 'bg-emerald-600 hover:bg-emerald-700'
+                    }`}
                 >
-                    <CheckCircle size={28} />
-                    {isSubmitting ? 'SUBMITTING...' : 'SUBMIT TO CASHIER'}
+                    {isComplimentaryMode ? <Gift size={28} /> : <CheckCircle size={28} />}
+                    {isSubmitting ? 'PROCESSING...' : isComplimentaryMode ? 'ISSUE COMPLIMENTARY VOUCHER' : 'SUBMIT TO CASHIER'}
                 </button>
             </div>
         </div>

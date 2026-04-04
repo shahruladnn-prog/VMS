@@ -7,7 +7,7 @@ import {
   Edit2, Trash2, Download, User, FileText, Activity, Calendar,
   Image as ImageIcon, ChevronLeft, ChevronRight, BarChart2, ShoppingBag,
   Users, CreditCard, TrendingUp, X, CheckSquare, Square, FileSpreadsheet,
-  Printer, Mail, Send, RefreshCcw
+  Printer, Mail, Send, RefreshCcw, Gift
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
@@ -125,9 +125,9 @@ export const Reports: React.FC = () => {
     }).sort((a, b) => new Date(b.dates.soldAt).getTime() - new Date(a.dates.soldAt).getTime());
   }, [vouchers, dateRange, filterType, filterValue, filterStatus, searchQuery]);
 
-  // Only count paid/active vouchers for analytics (exclude pending)
+  // Only count paid/active vouchers for analytics (exclude pending AND complimentary)
   const paidData = useMemo(() =>
-    filteredData.filter(v => v.status !== VoucherStatus.PENDING_PAYMENT),
+    filteredData.filter(v => v.status !== VoucherStatus.PENDING_PAYMENT && !v.isComplimentary),
     [filteredData]
   );
 
@@ -356,6 +356,7 @@ export const Reports: React.FC = () => {
       'Category': v.voucherDetails.category,
       'Event': v.eventSource,
       'Status': v.status,
+      'Complimentary': v.isComplimentary ? 'Yes' : 'No',
       'Sale Channel': v.saleChannel || 'POS',
       'Sold Date': v.dates.soldAt.split('T')[0],
       'Expiry Date': v.dates.expiryDate.split('T')[0],
@@ -388,6 +389,7 @@ export const Reports: React.FC = () => {
       'Item Name': v.voucherDetails.name,
       'Category': v.voucherDetails.category,
       'Status': v.status,
+      'Complimentary': v.isComplimentary ? 'Yes' : 'No',
       'Sale Channel': v.saleChannel || 'POS',
       'Sold Date': v.dates.soldAt.split('T')[0],
       'Expiry Date': v.dates.expiryDate.split('T')[0],
@@ -629,7 +631,16 @@ export const Reports: React.FC = () => {
                       <td className="px-4 py-3 font-mono font-bold text-gray-700 text-xs">{v.voucherCode}</td>
                       <td className="px-4 py-3 font-medium text-gray-900">{v.clientName}</td>
                       <td className="px-4 py-3 text-gray-800 font-bold">RM{v.voucherDetails.value}</td>
-                      <td className="px-4 py-3"><VoucherStatusBadge status={v.status} /></td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <VoucherStatusBadge status={v.status} />
+                          {v.isComplimentary && (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-bold border bg-teal-50 text-teal-700 border-teal-200 flex items-center gap-1">
+                              <Gift size={10} /> Comp
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-gray-600 text-xs">{v.dates.soldAt.slice(0, 10)}</td>
                       <td className="px-4 py-3 text-gray-700 max-w-[140px] truncate">{v.voucherDetails.name}</td>
                       <td className="px-4 py-3 text-gray-600 text-xs">{v.financials.paymentMethod || '-'}</td>

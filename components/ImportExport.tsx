@@ -73,7 +73,8 @@ export const ImportExport: React.FC = () => {
                 },
                 redemption: {
                     branchName: row.branch_name
-                }
+                },
+                isComplimentary: row.is_complimentary === 'Yes' || row.is_complimentary === 'true' || undefined
             };
           });
 
@@ -114,7 +115,8 @@ export const ImportExport: React.FC = () => {
       receipt_no: v.financials.receiptNo || '',
       invoice_no: v.financials.invoiceNo || '',
       cash_received: v.financials.cashReceived || '',
-      change_amount: v.financials.changeAmount || ''
+      change_amount: v.financials.changeAmount || '',
+      is_complimentary: v.isComplimentary ? 'Yes' : 'No'
     }));
 
     const csv = Papa.unparse(csvData);
@@ -154,7 +156,8 @@ export const ImportExport: React.FC = () => {
         receipt_no: 'RCPT-001',
         invoice_no: 'INV-001',
         cash_received: '200',
-        change_amount: '32'
+        change_amount: '32',
+        is_complimentary: ''
       }
     ];
     const csv = Papa.unparse(data);
