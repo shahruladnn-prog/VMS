@@ -138,7 +138,7 @@ export const SalesMode: React.FC = () => {
                     eventSource: 'Sales Desk',
                     // Complimentary vouchers skip the queue and go straight to Active
                     status: isComplimentaryMode ? VoucherStatus.ACTIVE : VoucherStatus.PENDING_PAYMENT,
-                    isComplimentary: isComplimentaryMode || undefined,
+                    ...(isComplimentaryMode && { isComplimentary: true }),
                     workflow: { salesPersonName: currentUser?.fullName || 'Unknown' },
                     dates: {
                         soldAt: saleDate,

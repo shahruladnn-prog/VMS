@@ -108,7 +108,7 @@ export const RedemptionMode: React.FC = () => {
       const updated: Voucher = {
         ...singleResult,
         status: VoucherStatus.REDEEMED,
-        dates: { ...singleResult.dates, redemptionDate: new Date().toISOString(), bookingDate: bookingDate || undefined },
+        dates: { ...singleResult.dates, redemptionDate: new Date().toISOString(), ...(bookingDate ? { bookingDate } : {}) },
         redemption: { branchName: branch },
         workflow: { ...singleResult.workflow, redemptionPicName: picName }
       };

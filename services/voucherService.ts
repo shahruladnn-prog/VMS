@@ -645,7 +645,7 @@ export const bulkRedeemVouchers = async (
         const updated: Voucher = {
             ...v,
             status: VoucherStatus.REDEEMED,
-            dates: { ...v.dates, redemptionDate: now, bookingDate: bookingDate || undefined },
+            dates: { ...v.dates, redemptionDate: now, ...(bookingDate ? { bookingDate } : {}) },
             redemption: { branchName: branch },
             workflow: { ...v.workflow, redemptionPicName: picName }
         };
