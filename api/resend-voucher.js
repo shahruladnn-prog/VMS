@@ -24,8 +24,8 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
   const { voucherId, agentId } = req.body;
-  if (!voucherId || !agentId) {
-    return res.status(400).json({ error: 'Missing voucherId or agentId' });
+  if (!voucherId) {
+    return res.status(400).json({ error: 'Missing voucherId' });
   }
 
   try {
@@ -40,7 +40,8 @@ export default async function handler(req, res) {
     const v = voucherSnap.data();
 
     // Security: ensure the calling agent owns this voucher
-    if (v.agentId !== agentId) {
+    // Customers can resend their own vouchers.
+    if (agentId && agentId !== 'CUSTOMER' && v.agentId !== agentId) {
       return res.status(403).json({ error: 'Not authorised to resend this voucher' });
     }
 
@@ -144,8 +145,8 @@ export default async function handler(req, res) {
 
     console.log(`resend-voucher: Resent ${v.voucherCode} to ${v.email} by agent ${agentId}`);
 
-    // Also notify agent
-    if (agentEmail && agentEmail !== v.email) {
+    // Also notify agent (only if triggered by agent)
+    if (agentId && agentId !== 'CUSTOMER' && agentEmail && agentEmail !== v.email) {
       try {
         await transporter.sendMail({
           from: `"${es.senderName || biz}" <${es.senderEmail || es.smtpUser}>`,

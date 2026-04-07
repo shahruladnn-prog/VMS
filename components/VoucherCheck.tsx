@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { fetchVoucherByCode, fetchVouchersByPhone } from '../services/voucherService';
 import { Voucher, VoucherStatus } from '../types';
-import { Search, Loader, CheckCircle, XCircle, Clock, AlertTriangle, Tag, QrCode } from 'lucide-react';
+import { Search, Loader, CheckCircle, XCircle, Clock, AlertTriangle, Tag, QrCode, Mail, Check } from 'lucide-react';
 
 export const VoucherCheck: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<Voucher[] | null | 'not_found'>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
+  const [resendSuccess, setResendSuccess] = useState<string | null>(null);
 
   const handleSearch = async () => {
     if (!searchTerm.trim()) return;
@@ -17,15 +19,41 @@ export const VoucherCheck: React.FC = () => {
       
       if (isPhoneNumber) {
         const found = await fetchVouchersByPhone(searchTerm);
-        setResults(found.length > 0 ? found : 'not_found');
+        const filtered = found.filter(v => v.status === VoucherStatus.ACTIVE || v.status === VoucherStatus.REDEEMED);
+        setResults(filtered.length > 0 ? filtered : 'not_found');
       } else {
         const found = await fetchVoucherByCode(searchTerm);
-        setResults(found ? [found] : 'not_found');
+        if (found && (found.status === VoucherStatus.ACTIVE || found.status === VoucherStatus.REDEEMED)) {
+          setResults([found]);
+        } else {
+          setResults('not_found');
+        }
       }
     } catch {
       setResults('not_found');
     }
     setLoading(false);
+  };
+
+  const handleResend = async (voucherId: string) => {
+    setResendingId(voucherId);
+    setResendSuccess(null);
+    try {
+      const response = await fetch('/api/resend-voucher', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voucherId, agentId: 'CUSTOMER' }),
+      });
+      if (response.ok) {
+        setResendSuccess(voucherId);
+        setTimeout(() => setResendSuccess(null), 3000);
+      } else {
+        alert('Failed to resend voucher email. Please try again.');
+      }
+    } catch (e) {
+      alert('Network error while resending voucher email.');
+    }
+    setResendingId(null);
   };
 
   const statusConfig: Record<VoucherStatus, { color: string; icon: React.ReactNode; label: string }> = {
@@ -107,6 +135,24 @@ export const VoucherCheck: React.FC = () => {
                     <div className="mt-3 pt-3 border-t border-current/20">
                       <p className="opacity-70 text-xs mb-1">Terms & Conditions</p>
                       <p className="text-xs leading-relaxed opacity-80">{result.voucherDetails.terms}</p>
+                    </div>
+                  )}
+                  {result.email && (
+                    <div className="mt-4 pt-4 border-t border-current/20 flex justify-end">
+                      <button
+                        onClick={() => handleResend(result.id)}
+                        disabled={resendingId === result.id || resendSuccess === result.id}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm min-w-[120px] justify-center"
+                      >
+                        {resendingId === result.id ? (
+                          <Loader size={14} className="animate-spin" />
+                        ) : resendSuccess === result.id ? (
+                          <Check size={14} />
+                        ) : (
+                          <Mail size={14} />
+                        )}
+                        {resendingId === result.id ? 'Sending...' : resendSuccess === result.id ? 'Email Sent!' : 'Resend Email'}
+                      </button>
                     </div>
                   )}
                 </div>
