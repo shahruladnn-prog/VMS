@@ -9,6 +9,8 @@ export const VoucherCheck: React.FC = () => {
   const [results, setResults] = useState<Voucher[] | null | 'not_found'>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [resendSuccess, setResendSuccess] = useState<string | null>(null);
+  const [resendingAll, setResendingAll] = useState(false);
+  const [resendAllSuccess, setResendAllSuccess] = useState(false);
 
   const handleSearch = async () => {
     if (!searchTerm.trim()) return;
@@ -56,6 +58,29 @@ export const VoucherCheck: React.FC = () => {
     setResendingId(null);
   };
 
+  const handleResendAll = async () => {
+    if (!results || results === 'not_found' || results.length === 0) return;
+    setResendingAll(true);
+    setResendAllSuccess(false);
+    try {
+      const voucherIds = results.map(v => v.id);
+      const response = await fetch('/api/resend-voucher', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voucherIds, agentId: 'CUSTOMER' }),
+      });
+      if (response.ok) {
+        setResendAllSuccess(true);
+        setTimeout(() => setResendAllSuccess(false), 4000);
+      } else {
+        alert('Failed to resend vouchers. Please try again.');
+      }
+    } catch (e) {
+      alert('Network error while resending emails.');
+    }
+    setResendingAll(false);
+  };
+
   const statusConfig: Record<VoucherStatus, { color: string; icon: React.ReactNode; label: string }> = {
     [VoucherStatus.ACTIVE]: { color: 'bg-emerald-50 border-emerald-300 text-emerald-800', icon: <CheckCircle className="text-emerald-500" size={32}/>, label: 'Active — Ready to Redeem' },
     [VoucherStatus.REDEEMED]: { color: 'bg-blue-50 border-blue-300 text-blue-800', icon: <CheckCircle className="text-blue-500" size={32}/>, label: 'Already Redeemed' },
@@ -99,8 +124,18 @@ export const VoucherCheck: React.FC = () => {
         {/* Result */}
         {results && results !== 'not_found' && (
           <div className="space-y-4">
-            <div className="text-center text-teal-100 text-sm mb-2 font-medium">
-              Found {results.length} voucher{results.length > 1 ? 's' : ''}
+            <div className="text-center text-teal-100 text-sm mb-2 font-medium flex flex-col items-center gap-3">
+              <span>Found {results.length} voucher{results.length > 1 ? 's' : ''}</span>
+              {results.length > 1 && results.some(v => v.email) && (
+                <button
+                  onClick={handleResendAll}
+                  disabled={resendingAll || resendAllSuccess}
+                  className="flex items-center gap-2 px-6 py-2 border-2 border-teal-400 text-teal-300 hover:bg-teal-400 hover:text-white text-sm font-extrabold rounded-full transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg active:scale-95"
+                >
+                  {resendingAll ? <Loader size={16} className="animate-spin" /> : resendAllSuccess ? <Check size={16} /> : <Mail size={16} />}
+                  {resendingAll ? 'GATHERING VOUCHERS...' : resendAllSuccess ? 'ALL VOUCHERS SENT!' : 'EMAIL ALL VOUCHERS IN ONE MESSAGE'}
+                </button>
+              )}
             </div>
             {results.map((result) => (
               <div key={result.id} className={`rounded-2xl border-2 p-6 shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-300 ${statusConfig[result.status]?.color || 'bg-white border-gray-200'}`}>
