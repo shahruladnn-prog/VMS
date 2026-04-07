@@ -1,22 +1,29 @@
 import React, { useState } from 'react';
-import { fetchVoucherByCode } from '../services/voucherService';
+import { fetchVoucherByCode, fetchVouchersByPhone } from '../services/voucherService';
 import { Voucher, VoucherStatus } from '../types';
 import { Search, Loader, CheckCircle, XCircle, Clock, AlertTriangle, Tag, QrCode } from 'lucide-react';
 
 export const VoucherCheck: React.FC = () => {
-  const [code, setCode] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<Voucher | null | 'not_found'>(null);
+  const [results, setResults] = useState<Voucher[] | null | 'not_found'>(null);
 
   const handleSearch = async () => {
-    if (!code.trim()) return;
+    if (!searchTerm.trim()) return;
     setLoading(true);
-    setResult(null);
+    setResults(null);
     try {
-      const found = await fetchVoucherByCode(code);
-      setResult(found || 'not_found');
+      const isPhoneNumber = /^[\d\s\+\-\(\)]+$/.test(searchTerm) && searchTerm.replace(/[\D]/g, '').length >= 9;
+      
+      if (isPhoneNumber) {
+        const found = await fetchVouchersByPhone(searchTerm);
+        setResults(found.length > 0 ? found : 'not_found');
+      } else {
+        const found = await fetchVoucherByCode(searchTerm);
+        setResults(found ? [found] : 'not_found');
+      }
     } catch {
-      setResult('not_found');
+      setResults('not_found');
     }
     setLoading(false);
   };
@@ -42,18 +49,18 @@ export const VoucherCheck: React.FC = () => {
 
         {/* Search Box */}
         <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-6 mb-6">
-          <label className="block text-teal-300 text-xs font-bold uppercase mb-2">Voucher Code</label>
+          <label className="block text-teal-300 text-xs font-bold uppercase mb-2">Voucher Code or Phone Number</label>
           <input
             type="text"
-            value={code}
-            onChange={e => setCode(e.target.value.toUpperCase())}
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value.toUpperCase())}
             onKeyDown={e => e.key === 'Enter' && handleSearch()}
-            placeholder="e.g. GGP-XXXX-XXXX"
+            placeholder="e.g. GGP-XXXX-XXXX or 0123456789"
             className="w-full px-4 py-3 bg-white rounded-xl border-2 border-transparent focus:border-teal-400 outline-none text-gray-900 font-mono font-bold text-lg mb-4 text-center tracking-widest"
           />
           <button
             onClick={handleSearch}
-            disabled={!code.trim() || loading}
+            disabled={!searchTerm.trim() || loading}
             className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-extrabold py-3 rounded-xl flex items-center justify-center gap-2 transition-all"
           >
             {loading ? <Loader size={20} className="animate-spin" /> : <Search size={20} />}
@@ -62,50 +69,57 @@ export const VoucherCheck: React.FC = () => {
         </div>
 
         {/* Result */}
-        {result && result !== 'not_found' && (
-          <div className={`rounded-2xl border-2 p-6 shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-300 ${statusConfig[result.status]?.color || 'bg-white border-gray-200'}`}>
-            <div className="flex items-center gap-3 mb-4">
-              {statusConfig[result.status]?.icon}
-              <div>
-                <p className="font-extrabold text-lg">{statusConfig[result.status]?.label}</p>
-                <p className="font-mono text-sm opacity-70">{result.voucherCode}</p>
-              </div>
+        {results && results !== 'not_found' && (
+          <div className="space-y-4">
+            <div className="text-center text-teal-100 text-sm mb-2 font-medium">
+              Found {results.length} voucher{results.length > 1 ? 's' : ''}
             </div>
+            {results.map((result) => (
+              <div key={result.id} className={`rounded-2xl border-2 p-6 shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-300 ${statusConfig[result.status]?.color || 'bg-white border-gray-200'}`}>
+                <div className="flex items-center gap-3 mb-4">
+                  {statusConfig[result.status]?.icon}
+                  <div>
+                    <p className="font-extrabold text-lg">{statusConfig[result.status]?.label}</p>
+                    <p className="font-mono text-sm opacity-70">{result.voucherCode}</p>
+                  </div>
+                </div>
 
-            <div className="space-y-2 text-sm border-t border-current/20 pt-4">
-              <div className="flex justify-between">
-                <span className="opacity-70">Voucher</span>
-                <span className="font-bold">{result.voucherDetails.name}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="opacity-70">Value</span>
-                <span className="font-bold">RM{result.voucherDetails.value}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="opacity-70">Valid Until</span>
-                <span className="font-bold">{result.dates.expiryDate.split('T')[0]}</span>
-              </div>
-              {result.status === VoucherStatus.REDEEMED && result.dates.redemptionDate && (
-                <div className="flex justify-between">
-                  <span className="opacity-70">Redeemed On</span>
-                  <span className="font-bold">{result.dates.redemptionDate.split('T')[0]}</span>
+                <div className="space-y-2 text-sm border-t border-current/20 pt-4">
+                  <div className="flex justify-between">
+                    <span className="opacity-70">Voucher</span>
+                    <span className="font-bold">{result.voucherDetails.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="opacity-70">Value</span>
+                    <span className="font-bold">RM{result.voucherDetails.value}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="opacity-70">Valid Until</span>
+                    <span className="font-bold">{result.dates.expiryDate.split('T')[0]}</span>
+                  </div>
+                  {result.status === VoucherStatus.REDEEMED && result.dates.redemptionDate && (
+                    <div className="flex justify-between">
+                      <span className="opacity-70">Redeemed On</span>
+                      <span className="font-bold">{result.dates.redemptionDate.split('T')[0]}</span>
+                    </div>
+                  )}
+                  {result.voucherDetails.terms && (
+                    <div className="mt-3 pt-3 border-t border-current/20">
+                      <p className="opacity-70 text-xs mb-1">Terms & Conditions</p>
+                      <p className="text-xs leading-relaxed opacity-80">{result.voucherDetails.terms}</p>
+                    </div>
+                  )}
                 </div>
-              )}
-              {result.voucherDetails.terms && (
-                <div className="mt-3 pt-3 border-t border-current/20">
-                  <p className="opacity-70 text-xs mb-1">Terms & Conditions</p>
-                  <p className="text-xs leading-relaxed opacity-80">{result.voucherDetails.terms}</p>
-                </div>
-              )}
-            </div>
+              </div>
+            ))}
           </div>
         )}
 
-        {result === 'not_found' && (
+        {results === 'not_found' && (
           <div className="bg-red-50/10 border border-red-400/30 rounded-2xl p-6 text-center animate-in fade-in duration-300">
             <AlertTriangle className="text-red-400 mx-auto mb-2" size={28} />
-            <p className="text-white font-bold">Voucher not found</p>
-            <p className="text-red-300 text-sm mt-1">Please check the code and try again.</p>
+            <p className="text-white font-bold">No vouchers found</p>
+            <p className="text-red-300 text-sm mt-1">Please check the code or phone number and try again.</p>
           </div>
         )}
 
